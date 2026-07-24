@@ -1,0 +1,7 @@
+services:
+  digital-mentor:
+    build: .
+    container_name: digital-mentor
+    ports:
+      - "8080:80"
+    restart: unless-stopped
