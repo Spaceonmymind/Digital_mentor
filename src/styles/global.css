@@ -1,3 +1,27 @@
+@font-face {
+  font-family: "Golos Text";
+  src: url("../assets/fonts/Golos-Text_Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Golos Text";
+  src: url("../assets/fonts/Golos-Text_DemiBold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Golos Text";
+  src: url("../assets/fonts/Golos-Text_Bold.ttf") format("truetype");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -11,7 +35,7 @@ body {
     radial-gradient(circle at 52% 42%, rgba(255, 255, 255, 0.9) 0 22%, transparent 23%),
     radial-gradient(circle at 46% 92%, rgba(255, 255, 255, 0.9) 0 28%, transparent 29%),
     linear-gradient(115deg, #f7f8f8 0%, #f2f5f5 54%, #edf7f8 100%);
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  font-family: "Golos Text", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
 }
 
 button,
@@ -238,8 +262,8 @@ button {
 }
 
 .partner-logos__university {
-  width: 42px;
-  height: 42px;
+  width: 218px;
+  height: 58px;
 }
 
 .partner-logos__cross {
@@ -252,7 +276,7 @@ button {
   font-size: 28px;
   line-height: 1.05;
   white-space: nowrap;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Golos Text", Georgia, "Times New Roman", serif;
   font-weight: 700;
 }
 
@@ -392,7 +416,8 @@ button {
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.92), transparent 33%),
+    radial-gradient(circle at 50% 36%, rgba(255, 255, 255, 0.94), transparent 35%),
+    radial-gradient(circle at 30% 76%, rgba(53, 92, 168, 0.12), transparent 22%),
     linear-gradient(145deg, #e8f0f1 0%, #f8fafa 100%);
 }
 
@@ -408,6 +433,21 @@ button {
 .is-sidebar-collapsed .avatar-person {
   transform-origin: center;
   scale: 1.22;
+}
+
+.mascot-image {
+  position: relative;
+  z-index: 1;
+  width: min(78%, 360px);
+  max-height: 430px;
+  object-fit: contain;
+  filter: drop-shadow(0 22px 26px rgba(37, 101, 105, 0.18));
+  animation: breathe 3.4s ease-in-out infinite;
+}
+
+.is-sidebar-collapsed .mascot-image {
+  width: min(82%, 410px);
+  max-height: 520px;
 }
 
 .avatar-orbit {

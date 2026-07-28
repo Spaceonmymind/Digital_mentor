@@ -36,6 +36,14 @@ http://localhost:8080/
 
 На сервере достаточно скопировать проект, выполнить команду выше и открыть порт `8080` либо прокинуть его через reverse proxy.
 
+## Бренд-ассеты
+
+В интерфейсе подключены рабочие копии из брендбука:
+
+- шрифт Golos Text из `src/assets/fonts/`;
+- логотип Финансового университета `src/assets/logos/financial-university-brand.png`;
+- маскот `src/assets/mascot/finik-kosmonavt.png`.
+
 ## Что реализовано
 
 - загрузка PDF/DOCX через кнопку и drag-and-drop;
@@ -46,11 +54,3 @@ http://localhost:8080/
 - блок признаков генеративного ИИ с некатегоричным пояснением;
 - план улучшений и интерактивные направления доработки;
 - демонстрационный чат с быстрыми вопросами.
-
-
-git init
-git add .
-git commit -m "Initial digital mentor demo"
-git branch -M main
-git remote add origin git@github.com:Spaceonmymind/Digital_mentor.git
-git push -u origin main
