@@ -12,6 +12,10 @@ import { renderIcons } from "./icons.js";
 const state = {
   file: null,
   sound: true,
+  speechReady: false,
+  voices: [],
+  selectedVoice: null,
+  lastSpokenMessage: "",
   activeRemark: 0,
   sidebarCollapsed: true,
 };
@@ -71,6 +75,70 @@ function setMentor(status, message) {
   elements.avatarCard.dataset.status = status;
   elements.mentorStatus.textContent = statusLabels[status] || statusLabels.idle;
   elements.mentorMessage.textContent = message;
+  speakMentor(message);
+}
+
+function isSpeechSupported() {
+  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+}
+
+function loadVoices() {
+  if (!isSpeechSupported()) return;
+
+  state.voices = window.speechSynthesis.getVoices();
+  state.selectedVoice =
+    state.voices.find((voice) => voice.lang.toLowerCase().startsWith("ru")) ||
+    state.voices.find((voice) => /russian|рус/i.test(voice.name)) ||
+    state.voices[0] ||
+    null;
+}
+
+function enableSpeech() {
+  state.speechReady = true;
+  loadVoices();
+}
+
+function normalizeSpeechText(text) {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/AI/gi, "эй ай")
+    .replace(/ИИ/g, "искусственного интеллекта")
+    .replace(/PDF/g, "пи ди эф")
+    .replace(/DOCX/g, "док икс")
+    .trim();
+}
+
+function speakMentor(message, force = false) {
+  if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
+
+  const text = normalizeSpeechText(message);
+  if (!text || (!force && text === state.lastSpokenMessage)) return;
+
+  state.lastSpokenMessage = text;
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ru-RU";
+  utterance.rate = 1.02;
+  utterance.pitch = 1.08;
+  utterance.volume = 0.95;
+
+  if (state.selectedVoice) {
+    utterance.voice = state.selectedVoice;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeech() {
+  if (isSpeechSupported()) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function updateSoundButton() {
+  elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${state.sound ? "Озвучивание включено" : "Озвучивание выключено"}`;
+  renderIcons();
 }
 
 function showStage(stageName) {
@@ -284,6 +352,11 @@ async function startAnalysis() {
 }
 
 function bindEvents() {
+  if (isSpeechSupported()) {
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+  }
+
   elements.navItems.forEach((item) => {
     item.addEventListener("click", () => {
       const section = item.dataset.section;
@@ -293,10 +366,22 @@ function bindEvents() {
 
   elements.chooseFileButton.addEventListener("click", () => elements.fileInput.click());
   elements.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
-  elements.fileInput.addEventListener("change", () => setFile(elements.fileInput.files[0]));
-  elements.removeFileButton.addEventListener("click", () => resetScenario());
-  elements.startAnalysisButton.addEventListener("click", startAnalysis);
-  elements.resetButton.addEventListener("click", resetScenario);
+  elements.fileInput.addEventListener("change", () => {
+    enableSpeech();
+    setFile(elements.fileInput.files[0]);
+  });
+  elements.removeFileButton.addEventListener("click", () => {
+    enableSpeech();
+    resetScenario();
+  });
+  elements.startAnalysisButton.addEventListener("click", () => {
+    enableSpeech();
+    startAnalysis();
+  });
+  elements.resetButton.addEventListener("click", () => {
+    enableSpeech();
+    resetScenario();
+  });
 
   ["dragenter", "dragover"].forEach((eventName) => {
     elements.dropZone.addEventListener(eventName, (event) => {
@@ -313,6 +398,7 @@ function bindEvents() {
   });
 
   elements.dropZone.addEventListener("drop", (event) => {
+    enableSpeech();
     setFile(event.dataTransfer.files[0]);
   });
 
@@ -328,6 +414,7 @@ function bindEvents() {
     if (!button) return;
     const direction = improvementDirections[Number(button.dataset.direction)];
     elements.directionResult.textContent = direction.text;
+    enableSpeech();
     setMentor("speaking", direction.text);
   });
 
@@ -340,6 +427,7 @@ function bindEvents() {
   elements.quickQuestions.addEventListener("click", (event) => {
     const button = event.target.closest("[data-question]");
     if (!button) return;
+    enableSpeech();
     askMentor(button.dataset.question);
   });
 
@@ -347,6 +435,7 @@ function bindEvents() {
     event.preventDefault();
     const question = elements.chatInput.value.trim();
     if (!question) return;
+    enableSpeech();
     elements.chatInput.value = "";
     askMentor(question);
   });
@@ -355,9 +444,18 @@ function bindEvents() {
 
   [elements.soundToggle, elements.avatarSoundButton].forEach((button) => {
     button.addEventListener("click", () => {
+      enableSpeech();
       state.sound = !state.sound;
-      elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${state.sound ? "Озвучивание включено" : "Озвучивание выключено"}`;
-      renderIcons();
+      updateSoundButton();
+      if (state.sound) {
+        if (!isSpeechSupported()) {
+          showNotification("Браузер не поддерживает встроенную озвучку.");
+          return;
+        }
+        speakMentor(elements.mentorMessage.textContent, true);
+      } else {
+        stopSpeech();
+      }
       showNotification(state.sound ? "Звук включен." : "Звук выключен.");
     });
   });
@@ -367,4 +465,5 @@ renderIcons();
 renderAnalysisSteps();
 bindEvents();
 setSidebarCollapsed(true);
+updateSoundButton();
 resetScenario();
