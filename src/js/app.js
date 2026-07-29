@@ -16,6 +16,8 @@ const state = {
   voices: [],
   selectedVoice: null,
   lastSpokenMessage: "",
+  recognition: null,
+  isListening: false,
   activeRemark: 0,
   sidebarCollapsed: true,
 };
@@ -149,6 +151,98 @@ function updateSoundButton() {
   elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${state.sound ? "Озвучивание включено" : "Озвучивание выключено"}`;
   elements.soundToggle.classList.toggle("is-active", state.sound);
   renderIcons();
+}
+
+function getSpeechRecognitionConstructor() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+}
+
+function isVoiceInputSupported() {
+  return Boolean(getSpeechRecognitionConstructor());
+}
+
+function updateMicButton() {
+  elements.micButton.classList.toggle("is-active", state.isListening);
+  elements.micButton.setAttribute("aria-label", state.isListening ? "Остановить голосовой ввод" : "Голосовой ввод");
+  elements.micButton.title = state.isListening ? "Остановить голосовой ввод" : "Голосовой ввод";
+}
+
+function ensureRecognition() {
+  if (state.recognition || !isVoiceInputSupported()) return state.recognition;
+
+  const Recognition = getSpeechRecognitionConstructor();
+  const recognition = new Recognition();
+  recognition.lang = "ru-RU";
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.addEventListener("start", () => {
+    state.isListening = true;
+    updateMicButton();
+    elements.chatInput.placeholder = "Слушаю вопрос...";
+    showNotification("Говорите, я слушаю.");
+  });
+
+  recognition.addEventListener("result", (event) => {
+    const transcript = Array.from(event.results)
+      .map((result) => result[0]?.transcript || "")
+      .join(" ")
+      .trim();
+
+    if (transcript) {
+      elements.chatInput.value = transcript;
+    }
+
+    const lastResult = event.results[event.results.length - 1];
+    if (lastResult?.isFinal && transcript) {
+      recognition.stop();
+      elements.chatInput.value = "";
+      enableSpeech();
+      askMentor(transcript);
+    }
+  });
+
+  recognition.addEventListener("error", (event) => {
+    const messages = {
+      "not-allowed": "Браузер не получил доступ к микрофону.",
+      "no-speech": "Речь не распознана. Попробуйте еще раз.",
+      "audio-capture": "Микрофон не найден или недоступен.",
+      network: "Сервис распознавания речи недоступен.",
+    };
+    showNotification(messages[event.error] || "Не удалось распознать голос.");
+  });
+
+  recognition.addEventListener("end", () => {
+    state.isListening = false;
+    updateMicButton();
+    elements.chatInput.placeholder = "Задайте вопрос ментору";
+  });
+
+  state.recognition = recognition;
+  return recognition;
+}
+
+function startVoiceInput() {
+  if (!isVoiceInputSupported()) {
+    showNotification("Голосовой ввод не поддерживается этим браузером. Лучше открыть в Chrome или Edge.");
+    return;
+  }
+
+  const recognition = ensureRecognition();
+  if (!recognition) return;
+
+  if (state.isListening) {
+    recognition.stop();
+    return;
+  }
+
+  stopSpeech();
+  try {
+    recognition.start();
+  } catch (error) {
+    showNotification("Голосовой ввод уже запускается.");
+  }
 }
 
 function showStage(stageName) {
@@ -450,7 +544,10 @@ function bindEvents() {
     askMentor(question);
   });
 
-  elements.micButton.addEventListener("click", () => showNotification("Голосовой ввод будет подключен на следующем этапе."));
+  elements.micButton.addEventListener("click", () => {
+    enableSpeech();
+    startVoiceInput();
+  });
 
   [elements.soundToggle, elements.avatarSoundButton].forEach((button) => {
     button.addEventListener("click", () => {
@@ -478,4 +575,5 @@ renderAnalysisSteps();
 bindEvents();
 setSidebarCollapsed(true);
 updateSoundButton();
+updateMicButton();
 resetScenario();
