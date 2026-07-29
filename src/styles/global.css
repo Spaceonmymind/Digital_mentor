@@ -496,6 +496,7 @@ button {
   object-fit: contain;
   filter: drop-shadow(0 22px 26px rgba(37, 101, 105, 0.18));
   transform-origin: 52% 84%;
+  animation: mascotIdle 3.4s ease-in-out infinite;
 }
 
 .is-sidebar-collapsed .mascot-image {
