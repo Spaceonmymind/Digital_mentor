@@ -11,7 +11,7 @@ import { renderIcons } from "./icons.js";
 
 const state = {
   file: null,
-  sound: true,
+  sound: false,
   speechReady: false,
   voices: [],
   selectedVoice: null,
@@ -128,6 +128,15 @@ function speakMentor(message, force = false) {
   }
 
   window.speechSynthesis.speak(utterance);
+
+  if (!state.voices.length) {
+    window.setTimeout(() => {
+      loadVoices();
+      if (!window.speechSynthesis.speaking && state.sound && state.speechReady) {
+        window.speechSynthesis.speak(utterance);
+      }
+    }, 250);
+  }
 }
 
 function stopSpeech() {
@@ -138,6 +147,7 @@ function stopSpeech() {
 
 function updateSoundButton() {
   elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${state.sound ? "Озвучивание включено" : "Озвучивание выключено"}`;
+  elements.soundToggle.classList.toggle("is-active", state.sound);
   renderIcons();
 }
 
@@ -452,11 +462,13 @@ function bindEvents() {
           showNotification("Браузер не поддерживает встроенную озвучку.");
           return;
         }
+        state.lastSpokenMessage = "";
+        showNotification("Звук включен. Сейчас Финик произнесет реплику.");
         speakMentor(elements.mentorMessage.textContent, true);
       } else {
         stopSpeech();
+        showNotification("Звук выключен.");
       }
-      showNotification(state.sound ? "Звук включен." : "Звук выключен.");
     });
   });
 }

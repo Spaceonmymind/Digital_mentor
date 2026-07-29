@@ -397,6 +397,11 @@ button {
   padding: 0;
 }
 
+.icon-button.is-active {
+  background: var(--accent-cyan);
+  color: #ffffff;
+}
+
 .icon-button svg,
 .button svg {
   width: 19px;
