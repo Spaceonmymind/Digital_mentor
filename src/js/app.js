@@ -121,7 +121,7 @@ function speakMentor(message, force = false) {
 
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ru-RU";
-  utterance.rate = 1.02;
+  utterance.rate = 1.12;
   utterance.pitch = 1.08;
   utterance.volume = 0.95;
 

@@ -147,7 +147,7 @@ export const improvementDirections = [
 
 export function mockMentorAnalysis(onProgress) {
   let index = 0;
-  const stepDelay = 1200;
+  const stepDelay = 3200;
 
   return new Promise((resolve) => {
     const tick = () => {
