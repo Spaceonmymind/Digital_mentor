@@ -211,7 +211,7 @@ button {
   border-radius: 18px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   display: grid;
-  grid-template-columns: auto minmax(360px, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 24px;
   align-items: center;
   position: sticky;
@@ -240,35 +240,64 @@ button {
   background: var(--accent-cyan);
 }
 
-.partner-logos {
+.brand-lockup {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 9px 12px;
-  border: 0;
+  gap: 20px;
+  min-width: 0;
+}
+
+.brand-logo-card {
+  width: 292px;
+  min-height: 74px;
+  padding: 10px 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
+  display: grid;
+  place-items: center;
+  background: #ffffff;
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
 }
 
-.partner-logos img {
+.brand-logo-card img {
   display: block;
   object-fit: contain;
 }
 
-.partner-logos__mir {
-  width: 126px;
-  height: 38px;
+.brand-logo-card__university {
+  width: 258px;
+  height: 54px;
 }
 
-.partner-logos__university {
-  width: 218px;
+.brand-divider {
+  width: 1px;
   height: 58px;
+  background: var(--border-light);
+  flex: 0 0 auto;
 }
 
-.partner-logos__cross {
-  color: var(--text-light);
-  font-size: 22px;
+.partner-badge {
+  min-height: 44px;
+  padding: 7px 12px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.partner-badge span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.partner-badge img {
+  width: 84px;
+  height: 26px;
+  object-fit: contain;
+  display: block;
 }
 
 .project-title h1 {
@@ -285,6 +314,7 @@ button {
   color: var(--text-secondary);
   font-size: 17px;
   line-height: 1.28;
+  max-width: 560px;
 }
 
 .topbar__actions {
@@ -421,6 +451,29 @@ button {
     linear-gradient(145deg, #e8f0f1 0%, #f8fafa 100%);
 }
 
+.avatar-stage::before {
+  content: "";
+  position: absolute;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 152, 175, 0.18), transparent 62%);
+  filter: blur(8px);
+  animation: auraPulse 3.8s ease-in-out infinite;
+}
+
+.avatar-stage::after {
+  content: "";
+  position: absolute;
+  bottom: 54px;
+  width: 56%;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(37, 101, 105, 0.16);
+  filter: blur(10px);
+  animation: mascotShadow 3.2s ease-in-out infinite;
+}
+
 .is-sidebar-collapsed .avatar-stage {
   min-height: 500px;
 }
@@ -437,12 +490,12 @@ button {
 
 .mascot-image {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: min(78%, 360px);
   max-height: 430px;
   object-fit: contain;
   filter: drop-shadow(0 22px 26px rgba(37, 101, 105, 0.18));
-  animation: breathe 3.4s ease-in-out infinite;
+  transform-origin: 52% 84%;
 }
 
 .is-sidebar-collapsed .mascot-image {
@@ -1132,6 +1185,47 @@ button {
   }
 }
 
+@keyframes mascotIdle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg) scale(1);
+  }
+
+  35% {
+    transform: translateY(-10px) rotate(1.6deg) scale(1.018);
+  }
+
+  70% {
+    transform: translateY(-4px) rotate(-0.7deg) scale(1.006);
+  }
+}
+
+@keyframes mascotShadow {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scaleX(1);
+  }
+
+  50% {
+    opacity: 0.48;
+    transform: scaleX(0.82);
+  }
+}
+
+@keyframes auraPulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
 @keyframes wave {
   50% {
     height: 30px;
@@ -1150,12 +1244,20 @@ button {
   }
 
   .topbar {
-    grid-template-columns: auto minmax(320px, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .topbar__actions {
     grid-column: 1 / -1;
     justify-content: flex-end;
+  }
+
+  .brand-logo-card {
+    width: 248px;
+  }
+
+  .brand-logo-card__university {
+    width: 218px;
   }
 
   .mentor-layout {
