@@ -11,6 +11,7 @@ brandbook/
 storage/documents/*
 storage/extracted/*
 storage/reports/*
+storage/audio/*
 !storage/documents/.gitkeep
 !storage/extracted/.gitkeep
 !storage/reports/.gitkeep

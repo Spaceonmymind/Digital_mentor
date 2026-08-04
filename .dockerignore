@@ -1,7 +1,15 @@
 .venv
+.git
+.pytest_cache
+backend/.pytest_cache
 .idea
 __pycache__
 *.pyc
 .DS_Store
 .env
 brandbook
+backups
+storage/documents/*
+storage/extracted/*
+storage/reports/*
+storage/audio/*

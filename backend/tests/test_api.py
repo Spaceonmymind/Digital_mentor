@@ -6,6 +6,7 @@ import pytest
 from docx import Document as DocxDocument
 from sqlalchemy import select
 
+from app.db.models import Analysis
 from app.api.v1 import documents as documents_api
 from app.db.models import AnalysisEvent
 from app.db.session import async_session_factory
@@ -56,6 +57,15 @@ async def test_healthcheck(client):
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
+    live = await client.get("/health/live")
+    assert live.status_code == 200
+    assert live.json()["status"] == "live"
+
+    ready = await client.get("/health/ready")
+    assert ready.status_code == 200
+    assert ready.json()["status"] == "ready"
+    assert ready.json()["analysis_engine"] == "mock"
+
 
 @pytest.mark.asyncio
 async def test_upload_pdf_success(client):
@@ -64,6 +74,12 @@ async def test_upload_pdf_success(client):
     assert payload["mime_type"] == "application/pdf"
     assert payload["size"] > 0
     assert payload["status"] == "uploaded"
+
+    content_response = await client.get(f"/api/v1/documents/{payload['id']}/content")
+    assert content_response.status_code == 200
+    content = content_response.json()["content"]
+    assert content["page_count"] == 1
+    assert content["pages"][0]["blocks"]
 
 
 @pytest.mark.asyncio
@@ -92,6 +108,72 @@ async def test_reject_wrong_format(client):
     )
     assert response.status_code == 400
     assert response.json()["error"]["code"] == "UNSUPPORTED_FILE_TYPE"
+
+
+@pytest.mark.asyncio
+async def test_reject_renamed_exe_as_pdf(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={"upload": ("malware.pdf", b"MZnot-a-pdf", "application/pdf")},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_FILE_SIGNATURE"
+
+
+@pytest.mark.asyncio
+async def test_reject_corrupted_pdf(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={"upload": ("broken.pdf", b"%PDF broken", "application/pdf")},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "DOCUMENT_CORRUPTED"
+
+
+@pytest.mark.asyncio
+async def test_reject_corrupted_docx(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={
+            "upload": (
+                "broken.docx",
+                b"PKbroken",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "INVALID_DOCX_STRUCTURE"
+
+
+@pytest.mark.asyncio
+async def test_reject_empty_pdf(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={"upload": ("empty.pdf", b"", "application/pdf")},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "EMPTY_FILE"
+
+
+@pytest.mark.asyncio
+async def test_upload_path_traversal_name_is_normalized(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={"upload": ("../nested/work.pdf", make_pdf_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "work.pdf"
+
+
+@pytest.mark.asyncio
+async def test_upload_unicode_filename(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={"upload": ("работа.pdf", make_pdf_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "работа.pdf"
 
 
 @pytest.mark.asyncio
@@ -143,6 +225,13 @@ async def test_create_analysis_progress_and_result(client):
     assert len(events) >= 9
     assert max(event.progress for event in events) == 100
 
+    report_response = await client.post(f"/api/v1/analyses/{analysis_id}/reports")
+    assert report_response.status_code == 200, report_response.text
+    report = report_response.json()
+    pdf_response = await client.get(report["report_url"])
+    assert pdf_response.status_code == 200
+    assert pdf_response.content.startswith(b"%PDF")
+
 
 @pytest.mark.asyncio
 async def test_create_analysis_missing_document(client):
@@ -157,6 +246,52 @@ async def test_create_analysis_missing_document(client):
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_cancel_analysis(client):
+    document = await upload_pdf(client)
+    async with async_session_factory() as session:
+        analysis = Analysis(
+            document_id=document["id"],
+            analysis_type="mentor",
+            methodology_id="mentor-default",
+            methodology_version="draft",
+            status="queued",
+            progress=0,
+            current_step="queued",
+        )
+        session.add(analysis)
+        await session.commit()
+        await session.refresh(analysis)
+        analysis_id = analysis.id
+
+    response = await client.post(f"/api/v1/analyses/{analysis_id}/cancel")
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_delete_document(client):
+    document = await upload_pdf(client)
+    response = await client.delete(f"/api/v1/documents/{document['id']}")
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "deleted"
+
+    get_response = await client.get(f"/api/v1/documents/{document['id']}")
+    assert get_response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_tts_stub(client):
+    response = await client.post("/api/v1/tts", json={"text": "Анализ завершен", "voice_id": "mentor-default"})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["format"] == "mp3"
+    assert payload["provider"] == "stub"
+    audio_response = await client.get(payload["audio_url"])
+    assert audio_response.status_code == 200
+    assert audio_response.content.startswith(b"ID3")
 
 
 @pytest.mark.asyncio
