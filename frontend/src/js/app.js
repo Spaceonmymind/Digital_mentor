@@ -568,7 +568,6 @@ function renderRecommendationPlan(items = recommendationPlan) {
         <article class="recommendation-card ${state.checkedRecommendations.has(item.priority) ? "is-checked" : ""}">
           <div class="recommendation-card__top">
             <div class="recommendation-card__number">
-              <span>Приоритет</span>
               <strong>${getRecommendationNumber(item.priority)}</strong>
             </div>
             <h3>${item.title}</h3>
