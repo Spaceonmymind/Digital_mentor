@@ -24,6 +24,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       DEMO_MODE: ${DEMO_MODE:-true}
+      PRESENTATION_MODE: ${PRESENTATION_MODE:-false}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://digital_mentor:change_me@db:5432/digital_mentor}
       STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
       MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}

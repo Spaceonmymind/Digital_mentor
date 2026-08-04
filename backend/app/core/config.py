@@ -26,6 +26,7 @@ class Settings:
     )
     mock_analysis_enabled: bool = _bool_env("MOCK_ANALYSIS_ENABLED", True)
     demo_mode: bool = _bool_env("DEMO_MODE", True)
+    presentation_mode: bool = _bool_env("PRESENTATION_MODE", False)
     frontend_mock_mode: bool = _bool_env("FRONTEND_MOCK_MODE", False)
     tts_mode: str = os.getenv("TTS_MODE", "browser")
     tts_max_text_length: int = int(os.getenv("TTS_MAX_TEXT_LENGTH", "700"))

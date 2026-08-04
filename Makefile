@@ -20,6 +20,7 @@ logs:
 
 test:
 	cd backend && ../.venv/bin/python -m pytest
+	node frontend/tests/smoke.mjs
 
 migrate:
 	$(COMPOSE) exec backend alembic upgrade head

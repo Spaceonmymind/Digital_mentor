@@ -217,6 +217,9 @@ async def test_create_analysis_progress_and_result(client):
     assert result["analysis_id"] == analysis_id
     assert result["overall_score"] == 87
     assert result["criteria"]
+    assert result["methodology"]["methodology_id"] == "mentor-default"
+    assert "extra_blocks" in result
+    assert "evidence" in result
 
     async with async_session_factory() as session:
         events = (
