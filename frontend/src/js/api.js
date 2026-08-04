@@ -34,6 +34,12 @@ export async function getPublicConfig() {
 }
 
 
+export async function getReadiness() {
+  const response = await fetch("/health/ready");
+  return parseResponse(response);
+}
+
+
 export async function getDocument(documentId) {
   const response = await fetch(`${API_BASE_URL}/documents/${documentId}`);
   return parseResponse(response);

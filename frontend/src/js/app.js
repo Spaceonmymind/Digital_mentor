@@ -9,12 +9,15 @@ import {
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
 import { FRONTEND_MOCK_MODE } from "./config.js";
 import { renderIcons } from "./icons.js";
-import { createReport, getPublicConfig } from "./api.js";
+import { cancelAnalysis, createReport, getPublicConfig } from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
 import { BrowserSpeechService, BrowserSttService, DisabledSpeechService, RemoteTtsSpeechService } from "./modules/speech.js";
 import { MascotController } from "./modules/mascot.js";
+import { addHistoryItem, getHistory, removeHistoryItem } from "./modules/history.js";
+import { checkReadiness } from "./modules/readiness.js";
+import { requestImprovementDirection } from "./modules/recommendations.js";
 
 const state = {
   file: null,
@@ -28,6 +31,10 @@ const state = {
   sidebarCollapsed: true,
   publicConfig: { demo_mode: false, frontend_mock_mode: false, tts_mode: "browser" },
   speechToken: 0,
+  uiState: "welcome",
+  result: null,
+  checkedRecommendations: new Set(),
+  lastSpokenStep: "",
 };
 
 const elements = {
@@ -43,9 +50,14 @@ const elements = {
   voiceWave: document.querySelector(".voice-wave"),
   mentorStatus: document.getElementById("mentorStatus"),
   mentorMessage: document.getElementById("mentorMessage"),
+  welcomeStage: document.getElementById("welcomeStage"),
   uploadStage: document.getElementById("uploadStage"),
   processingStage: document.getElementById("processingStage"),
+  summaryStage: document.getElementById("summaryStage"),
   resultsStage: document.getElementById("resultsStage"),
+  finalStage: document.getElementById("finalStage"),
+  errorStage: document.getElementById("errorStage"),
+  startDemoButton: document.getElementById("startDemoButton"),
   dropZone: document.getElementById("dropZone"),
   fileInput: document.getElementById("fileInput"),
   chooseFileButton: document.getElementById("chooseFileButton"),
@@ -54,7 +66,18 @@ const elements = {
   fileMeta: document.getElementById("fileMeta"),
   removeFileButton: document.getElementById("removeFileButton"),
   startAnalysisButton: document.getElementById("startAnalysisButton"),
+  cancelAnalysisButton: document.getElementById("cancelAnalysisButton"),
+  processingFileName: document.getElementById("processingFileName"),
+  processingPercent: document.getElementById("processingPercent"),
+  overallProgressBar: document.getElementById("overallProgressBar"),
   analysisSteps: document.getElementById("analysisSteps"),
+  summaryScore: document.getElementById("summaryScore"),
+  summaryVerdict: document.getElementById("summaryVerdict"),
+  summaryStrengths: document.getElementById("summaryStrengths"),
+  summaryImprovements: document.getElementById("summaryImprovements"),
+  detailsButton: document.getElementById("detailsButton"),
+  summaryReportButton: document.getElementById("summaryReportButton"),
+  summaryResetButton: document.getElementById("summaryResetButton"),
   criteriaList: document.getElementById("criteriaList"),
   strengthsList: document.getElementById("strengthsList"),
   improvementsList: document.getElementById("improvementsList"),
@@ -70,6 +93,8 @@ const elements = {
   chatForm: document.getElementById("chatForm"),
   chatInput: document.getElementById("chatInput"),
   micButton: document.getElementById("micButton"),
+  clearChatButton: document.getElementById("clearChatButton"),
+  stopSpeechButton: document.getElementById("stopSpeechButton"),
   soundToggle: document.getElementById("soundToggle"),
   avatarSoundButton: document.getElementById("avatarSoundButton"),
   resetButton: document.getElementById("resetButton"),
@@ -77,6 +102,20 @@ const elements = {
   modeBanner: document.getElementById("modeBanner"),
   demoDocumentButton: document.getElementById("demoDocumentButton"),
   reportButton: document.getElementById("reportButton"),
+  finishDemoButton: document.getElementById("finishDemoButton"),
+  finalReportButton: document.getElementById("finalReportButton"),
+  finalResetButton: document.getElementById("finalResetButton"),
+  backToResultsButton: document.getElementById("backToResultsButton"),
+  historyList: document.getElementById("historyList"),
+  errorTitle: document.getElementById("errorTitle"),
+  errorDescription: document.getElementById("errorDescription"),
+  errorRequestId: document.getElementById("errorRequestId"),
+  retryButton: document.getElementById("retryButton"),
+  fullscreenButton: document.getElementById("fullscreenButton"),
+  nextStageButton: document.getElementById("nextStageButton"),
+  presenterPanel: document.getElementById("presenterPanel"),
+  presenterCloseButton: document.getElementById("presenterCloseButton"),
+  readinessTable: document.getElementById("readinessTable"),
 };
 
 let speechService = new BrowserSpeechService();
@@ -124,6 +163,8 @@ const mascot = new MascotController({
 function setMentor(status, message) {
   const statusLabels = {
     idle: "Ожидает документ",
+    greeting: "Приветствует",
+    uploading: "Получает документ",
     speaking: "Формирует ответ",
     thinking: "Анализирует работу",
     success: "Анализ завершен",
@@ -155,7 +196,9 @@ function speakMentor(message, force = false) {
       if (token === state.speechToken) mascot.setMascotState({ state: "speaking", message });
     },
     onEnd: () => {
-      if (token === state.speechToken) mascot.setMascotState({ state: state.analysisId ? "success" : "idle", message });
+      if (token === state.speechToken) {
+        mascot.setMascotState({ state: state.uiState === "processing" ? "thinking" : state.analysisId ? "success" : "idle", message });
+      }
     },
   });
 }
@@ -163,6 +206,7 @@ function speakMentor(message, force = false) {
 function stopSpeech() {
   state.speechToken += 1;
   speechService.stop();
+  sttService.stop();
   mascot.setMascotState({ state: state.analysisId ? "success" : "idle" });
 }
 
@@ -187,6 +231,11 @@ function updateMicButton() {
 }
 
 function startVoiceInput() {
+  if (!state.analysisId && !FRONTEND_MOCK_MODE) {
+    showNotification("Сначала завершите анализ, после этого можно задавать вопросы.");
+    return;
+  }
+
   if (!isVoiceInputSupported()) {
     showNotification("Голосовой ввод не поддерживается этим браузером. Лучше открыть в Chrome или Edge.");
     return;
@@ -201,10 +250,19 @@ function startVoiceInput() {
 }
 
 function showStage(stageName) {
-  [elements.uploadStage, elements.processingStage, elements.resultsStage].forEach((stage) => {
+  [
+    elements.welcomeStage,
+    elements.uploadStage,
+    elements.processingStage,
+    elements.summaryStage,
+    elements.resultsStage,
+    elements.finalStage,
+    elements.errorStage,
+  ].forEach((stage) => {
     stage.classList.remove("is-visible");
   });
   elements[`${stageName}Stage`].classList.add("is-visible");
+  state.uiState = stageName;
 }
 
 function showPage(section) {
@@ -257,7 +315,7 @@ async function setFile(file) {
   elements.fileMeta.textContent = `${extension} · ${formatFileSize(file.size)}`;
   elements.filePreview.hidden = false;
   elements.startAnalysisButton.disabled = true;
-  setMentor("uploading", "Загружаю документ на сервер.");
+  setMentor("uploading", "Получаю документ и проверяю возможность обработки.");
 
   try {
     const documentMetadata = await uploadDocument(file);
@@ -265,7 +323,7 @@ async function setFile(file) {
     elements.fileName.textContent = documentMetadata.name;
     elements.fileMeta.textContent = `${extension} · ${formatFileSize(documentMetadata.size)}`;
     elements.startAnalysisButton.disabled = false;
-    setMentor("success", "Файл загружен. Можно запускать комплексный анализ.");
+    setMentor("success", "Документ получен. Я готов приступить к анализу.");
   } catch (error) {
     state.document = null;
     elements.startAnalysisButton.disabled = true;
@@ -288,30 +346,42 @@ async function useDemoDocument() {
 }
 
 function resetScenario() {
+  stopSpeech();
   state.file = null;
   state.document = null;
   state.analysisId = null;
+  state.result = null;
   state.remarks = documentRemarks;
+  state.checkedRecommendations = new Set();
+  state.lastSpokenStep = "";
   elements.fileInput.value = "";
   elements.filePreview.hidden = true;
   elements.startAnalysisButton.disabled = true;
+  elements.processingPercent.textContent = "0%";
+  elements.overallProgressBar.style.width = "0%";
   elements.directionResult.textContent = "Выберите направление улучшения.";
   elements.chatMessages.innerHTML = "";
   addMessage("mentor", "Загрузите работу, и я проведу комплексный анализ.");
   showStage("upload");
   setMentor("idle", "Загрузите работу, и я проведу комплексный анализ.");
+  renderHistory();
 }
 
 function renderAnalysisSteps(activeIndex = -1) {
   elements.analysisSteps.innerHTML = analysisSteps
     .map((step, index) => {
       const status = index < activeIndex ? "complete" : index === activeIndex ? "running" : "waiting";
-      const label = status === "complete" ? "Завершен" : status === "running" ? "Выполняется" : "Ожидает";
+      const label = status === "complete" ? "Завершено" : status === "running" ? "Выполняется" : "Ожидает";
       const indicator = status === "complete" ? '<span data-icon="check"></span>' : "";
+      const percent = Math.min(100, Math.round(((index + 1) / analysisSteps.length) * 100));
       return `
         <div class="analysis-step is-${status}">
           <div class="analysis-step__indicator">${indicator}</div>
-          <strong>${step.title}</strong>
+          <div>
+            <strong>${step.title}</strong>
+            <p>${step.description || ""}</p>
+          </div>
+          <span class="analysis-step__percent">${percent}%</span>
           <span class="analysis-step__state">${label}</span>
         </div>
       `;
@@ -322,15 +392,16 @@ function renderAnalysisSteps(activeIndex = -1) {
 
 function renderResults(result) {
   const normalized = normalizeResult(result);
+  state.result = normalized;
   state.remarks = normalized.remarks.length ? normalized.remarks : documentRemarks;
 
   elements.criteriaList.innerHTML = normalized.criteria
     .map(
-      ({ title, score }) => `
+      ({ title, score, explanation }) => `
         <div class="criterion">
-          <span>${title}</span>
+          <span>${title}<small>${explanation || getScoreLevel(score)}</small></span>
           <div class="progress"><span style="width: ${score}%"></span></div>
-          <strong>${score}%</strong>
+          <strong>${score}% · ${getScoreLevel(score)}</strong>
         </div>
       `,
     )
@@ -342,10 +413,21 @@ function renderResults(result) {
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
+  renderSummary(normalized);
+  if (normalized.analysis_id) {
+    addHistoryItem({
+      analysis_id: normalized.analysis_id,
+      document_name: state.document?.name || state.file?.name || "Документ",
+      overall_score: normalized.overall_score,
+      status: "completed",
+    });
+    renderHistory();
+  }
 }
 
 function normalizeResult(result) {
   return {
+    analysis_id: result.analysis_id || state.analysisId,
     overall_score: result.overall_score ?? 87,
     verdict: result.verdict ?? "Работа выполнена на хорошем уровне",
     criteria: (result.criteria || []).map((criterion) => {
@@ -360,6 +442,19 @@ function normalizeResult(result) {
     aiRisk: result.ai_risk || { factors: result.aiRiskFactors || [] },
     recommendations: result.recommendations || recommendationPlan,
   };
+}
+
+function getScoreLevel(score) {
+  if (score >= 90) return "Высокий";
+  if (score >= 75) return "Достаточный";
+  return "Требует внимания";
+}
+
+function renderSummary(result) {
+  elements.summaryScore.textContent = result.overall_score;
+  elements.summaryVerdict.textContent = `${result.verdict}. Основные направления развития связаны с методологией, аргументацией и практическим обоснованием.`;
+  renderList(elements.summaryStrengths, result.strengths.slice(0, 3));
+  renderList(elements.summaryImprovements, result.improvements.slice(0, 3));
 }
 
 function renderList(container, items) {
@@ -380,9 +475,12 @@ function renderRemark() {
   const remarks = state.remarks || documentRemarks;
   const remark = remarks[state.activeRemark] || remarks[0];
   elements.remarkContent.innerHTML = `
-    <h3>${remark.title}</h3>
-    <p><strong>Замечание:</strong> ${remark.quote}</p>
+    <span class="remark-meta">Страница ${remark.page || remark.page_number || 1} · ${remark.section || "Фрагмент документа"} · ${remark.severity || "warning"}</span>
+    <h3>${remark.title || remark.comment || "Замечание"}</h3>
+    <p><strong>Цитата:</strong> ${remark.quote}</p>
+    <p><strong>Пояснение:</strong> ${remark.comment || "Фрагмент требует уточнения."}</p>
     <p><strong>Рекомендация:</strong> ${remark.recommendation}</p>
+    <p><strong>Приоритет:</strong> ${remark.priority || "Средний"}</p>
   `;
   elements.remarkTabs.innerHTML = remarks
     .map(
@@ -396,12 +494,14 @@ function renderRecommendationPlan(items = recommendationPlan) {
   elements.recommendationPlan.innerHTML = items
     .map(
       (item) => `
-        <article class="recommendation-card">
+        <article class="recommendation-card ${state.checkedRecommendations.has(item.priority) ? "is-checked" : ""}">
           <strong>${item.priority}</strong>
           <h3>${item.title}</h3>
+          <p>${item.description || "Рекомендация поможет повысить качество итоговой работы."}</p>
           <p>Ожидаемый эффект: ${item.effect}</p>
           <p>Сложность: ${item.complexity}</p>
           <button class="button button--ghost" type="button" data-detail="${item.priority}">Подробнее</button>
+          <button class="button button--secondary" type="button" data-check-recommendation="${item.priority}">Учту при доработке</button>
         </article>
       `,
     )
@@ -432,6 +532,10 @@ function renderChat() {
 }
 
 async function askMentor(question) {
+  if (!state.analysisId && !FRONTEND_MOCK_MODE) {
+    showNotification("Сначала завершите анализ, затем задайте вопрос ментору.");
+    return;
+  }
   addMessage("user", question);
   setMentor("speaking", "Формирую ответ на ваш вопрос.");
   const typing = addMessage("mentor", "Ментор формирует ответ.", "is-typing");
@@ -453,6 +557,9 @@ async function askMentor(question) {
 async function startAnalysis() {
   if (!state.document?.id) return;
 
+  elements.processingFileName.textContent = state.document.name || state.file?.name || "Работа";
+  elements.processingPercent.textContent = "0%";
+  elements.overallProgressBar.style.width = "0%";
   showStage("processing");
   renderAnalysisSteps(0);
   setMentor("thinking", analysisSteps[0].message);
@@ -469,22 +576,45 @@ async function startAnalysis() {
         renderAnalysisSteps(index);
         state.analysisId = status.id || state.analysisId;
       }
-      setMentor("thinking", status.message || "Выполняю анализ документа.");
+      const progress = Math.max(0, Math.min(100, status.progress || 0));
+      elements.processingPercent.textContent = `${progress}%`;
+      elements.overallProgressBar.style.width = `${progress}%`;
+      const shouldSpeak = [20, 48, 72, 95].some((mark) => Math.abs(progress - mark) <= 3);
+      const stepKey = status.current_step || status.message;
+      if (shouldSpeak && stepKey !== state.lastSpokenStep) {
+        state.lastSpokenStep = stepKey;
+        setMentor("thinking", status.message || "Выполняю анализ документа.");
+      } else {
+        mascot.setMascotState({ state: "thinking", message: status.message || "Выполняю анализ документа." });
+      }
     });
 
     state.analysisId = result.analysis_id || state.analysisId;
+    elements.processingPercent.textContent = "100%";
+    elements.overallProgressBar.style.width = "100%";
     renderAnalysisSteps(analysisSteps.length);
     renderResults(result);
     renderDocumentReview();
     renderRecommendationPlan(normalizeResult(result).recommendations);
     renderDirections();
     renderChat();
-    showStage("results");
-    setMentor("success", "Анализ завершен. Я подготовил оценку, замечания и план улучшения.");
+    showStage("summary");
+    setMentor("success", `Анализ завершен. Общая оценка ${normalizeResult(result).overall_score} из 100. Работа выполнена на хорошем уровне.`);
   } catch (error) {
-    setMentor("error", error.message || "Анализ завершился с ошибкой.");
-    showNotification(error.message || "Анализ завершился с ошибкой.");
+    showError("Не удалось обработать документ", error.message || "Проверьте, что файл не поврежден и содержит текстовый слой.", error.body?.error?.request_id);
   }
+}
+
+async function cancelCurrentAnalysis() {
+  if (state.analysisId) {
+    try {
+      await cancelAnalysis(state.analysisId);
+    } catch {
+      // Best-effort cancellation for the demo interface.
+    }
+  }
+  showStage("upload");
+  setMentor("idle", "Анализ отменен. Можно выбрать другой документ.");
 }
 
 async function downloadReport() {
@@ -499,6 +629,78 @@ async function downloadReport() {
   } catch (error) {
     showNotification(error.message || "Не удалось сформировать отчет.");
   }
+}
+
+function showError(title, description, requestId) {
+  elements.errorTitle.textContent = title;
+  elements.errorDescription.textContent = description;
+  elements.errorRequestId.textContent = requestId ? `request_id: ${requestId}` : "request_id не получен";
+  showStage("error");
+  setMentor("error", description);
+}
+
+function renderHistory() {
+  const items = getHistory();
+  elements.historyList.innerHTML = items.length
+    ? items
+        .map(
+          (item) => `
+            <article class="history-item">
+              <div>
+                <strong>${item.document_name}</strong>
+                <span>${new Date(item.created_at).toLocaleString("ru-RU")} · ${item.overall_score || "—"} баллов · ${item.status}</span>
+              </div>
+              <button class="icon-button" type="button" aria-label="Удалить запись истории" data-remove-history="${item.analysis_id}">
+                <span data-icon="trash-2"></span>
+              </button>
+            </article>
+          `,
+        )
+        .join("")
+    : "<p>Пока нет сохраненных проверок.</p>";
+  renderIcons();
+}
+
+function openFullscreen() {
+  const target = document.documentElement;
+  if (!document.fullscreenEnabled || !target.requestFullscreen) {
+    showNotification("Браузер не поддерживает полноэкранный режим.");
+    return;
+  }
+  target.requestFullscreen().catch(() => showNotification("Не удалось включить полноэкранный режим."));
+}
+
+async function runReadinessCheck() {
+  const checks = await checkReadiness({ mascotImage: elements.mascotImage });
+  elements.readinessTable.innerHTML = `
+    <table>
+      <thead><tr><th>Компонент</th><th>Статус</th><th>Комментарий</th></tr></thead>
+      <tbody>${checks.map((item) => `<tr><td>${item.component}</td><td>${item.status}</td><td>${item.comment}</td></tr>`).join("")}</tbody>
+    </table>
+  `;
+}
+
+function showPresenterPanel(show = true) {
+  elements.presenterPanel.hidden = !show;
+  renderIcons();
+}
+
+function beginWork() {
+  enableSpeech();
+  showStage("upload");
+  setMentor(
+    "greeting",
+    "Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.",
+  );
+}
+
+function goNextStage() {
+  if (state.uiState === "welcome") beginWork();
+  else if (state.uiState === "upload" && state.document?.id) startAnalysis();
+  else if (state.uiState === "summary") showStage("results");
+  else if (state.uiState === "results") showStage("final");
+  else if (state.uiState === "final") resetScenario();
+  else showNotification("Дождитесь завершения текущего этапа.");
 }
 
 function configureSpeechService(ttsMode) {
@@ -520,18 +722,20 @@ async function loadPublicConfig() {
     const config = await getPublicConfig();
     state.publicConfig = config;
     configureSpeechService(config.tts_mode);
-    elements.demoDocumentButton.hidden = !config.demo_mode;
+    document.body.classList.toggle("is-presentation-mode", Boolean(config.presentation_mode));
+    elements.demoDocumentButton.hidden = !(config.demo_mode || FRONTEND_MOCK_MODE);
     elements.modeBanner.hidden = !(config.frontend_mock_mode || FRONTEND_MOCK_MODE);
   } catch (error) {
     configureSpeechService("browser");
     elements.modeBanner.hidden = !FRONTEND_MOCK_MODE;
+    elements.demoDocumentButton.hidden = !FRONTEND_MOCK_MODE;
   }
 }
 
 function bindEvents() {
   if (isSpeechSupported()) {
     loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
   }
 
   elements.navItems.forEach((item) => {
@@ -542,6 +746,7 @@ function bindEvents() {
   });
 
   elements.chooseFileButton.addEventListener("click", () => elements.fileInput.click());
+  elements.startDemoButton.addEventListener("click", beginWork);
   elements.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
   elements.fileInput.addEventListener("change", () => {
     enableSpeech();
@@ -555,12 +760,31 @@ function bindEvents() {
     enableSpeech();
     startAnalysis();
   });
+  elements.cancelAnalysisButton.addEventListener("click", cancelCurrentAnalysis);
   elements.resetButton.addEventListener("click", () => {
     enableSpeech();
     resetScenario();
   });
   elements.demoDocumentButton.addEventListener("click", useDemoDocument);
   elements.reportButton.addEventListener("click", downloadReport);
+  elements.finishDemoButton.addEventListener("click", () => {
+    showStage("final");
+    setMentor("success", "Работа завершена. Отчет и рекомендации готовы к дальнейшей доработке.");
+  });
+  elements.summaryReportButton.addEventListener("click", downloadReport);
+  elements.finalReportButton.addEventListener("click", downloadReport);
+  elements.detailsButton.addEventListener("click", () => {
+    showStage("results");
+    setMentor("success", "Открываю подробный анализ работы.");
+  });
+  elements.summaryResetButton.addEventListener("click", resetScenario);
+  elements.finalResetButton.addEventListener("click", resetScenario);
+  elements.backToResultsButton.addEventListener("click", () => showStage("results"));
+  elements.retryButton.addEventListener("click", resetScenario);
+  elements.fullscreenButton.addEventListener("click", openFullscreen);
+  elements.nextStageButton.addEventListener("click", goNextStage);
+  elements.clearChatButton.addEventListener("click", () => renderChat());
+  elements.stopSpeechButton.addEventListener("click", stopSpeech);
 
   ["dragenter", "dragover"].forEach((eventName) => {
     elements.dropZone.addEventListener(eventName, (event) => {
@@ -588,19 +812,43 @@ function bindEvents() {
     renderRemark();
   });
 
-  elements.directionButtons.addEventListener("click", (event) => {
+  elements.directionButtons.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-direction]");
     if (!button) return;
     const direction = improvementDirections[Number(button.dataset.direction)];
-    elements.directionResult.textContent = direction.text;
+    elements.directionResult.textContent = "Ментор подбирает рекомендацию.";
     enableSpeech();
-    setMentor("speaking", direction.text);
+    const answer = await requestImprovementDirection({
+      analysisId: state.analysisId,
+      label: direction.label,
+      fallbackText: direction.text,
+    });
+    elements.directionResult.textContent = answer;
+    setMentor("speaking", answer);
   });
 
   elements.recommendationPlan.addEventListener("click", (event) => {
+    const checkButton = event.target.closest("[data-check-recommendation]");
+    if (checkButton) {
+      const key = checkButton.dataset.checkRecommendation;
+      if (state.checkedRecommendations.has(key)) {
+        state.checkedRecommendations.delete(key);
+      } else {
+        state.checkedRecommendations.add(key);
+      }
+      renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
+      return;
+    }
     const button = event.target.closest("[data-detail]");
     if (!button) return;
     showNotification(`${button.dataset.detail}: подробная карточка будет подключена на следующем этапе.`);
+  });
+
+  elements.historyList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-history]");
+    if (!button) return;
+    removeHistoryItem(button.dataset.removeHistory);
+    renderHistory();
   });
 
   elements.quickQuestions.addEventListener("click", (event) => {
@@ -643,6 +891,35 @@ function bindEvents() {
       }
     });
   });
+
+  elements.presenterCloseButton.addEventListener("click", () => showPresenterPanel(false));
+  elements.presenterPanel.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-presenter-action]");
+    if (!button) return;
+    const action = button.dataset.presenterAction;
+    if (action === "reset") resetScenario();
+    if (action === "upload") showStage("upload");
+    if (action === "analysis") showStage("processing");
+    if (action === "summary") showStage(state.result ? "summary" : "results");
+    if (action === "mock") {
+      window.localStorage.setItem("FRONTEND_MOCK_MODE", "true");
+      elements.modeBanner.hidden = false;
+      showNotification("Автономный режим включен для следующего сценария.");
+    }
+    if (action === "sound") {
+      state.sound = !state.sound;
+      updateSoundButton();
+    }
+    if (action === "ready") await runReadinessCheck();
+    if (action === "fullscreen") openFullscreen();
+  });
+
+  window.addEventListener("keydown", (event) => {
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "d") {
+      event.preventDefault();
+      showPresenterPanel(elements.presenterPanel.hidden);
+    }
+  });
 }
 
 async function init() {
@@ -653,7 +930,12 @@ async function init() {
   setSidebarCollapsed(true);
   updateSoundButton();
   updateMicButton();
-  resetScenario();
+  renderHistory();
+  showStage("welcome");
+  setMentor(
+    "greeting",
+    "Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.",
+  );
 }
 
 init();
