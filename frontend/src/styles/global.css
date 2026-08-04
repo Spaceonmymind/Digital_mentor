@@ -3352,14 +3352,30 @@ body.is-modal-open {
 }
 
 /* Persistent navigation and mentor */
+.app-shell {
+  display: block;
+  min-height: 100vh;
+}
+
 .sidebar {
-  position: sticky;
+  position: fixed;
   top: 0;
-  align-self: flex-start;
-  height: 100vh;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
   max-height: 100vh;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.main {
+  min-height: 100vh;
+  margin-left: var(--sidebar-width);
+  transition: margin-left 0.24s ease;
+}
+
+.is-sidebar-collapsed .main {
+  margin-left: var(--sidebar-collapsed-width);
 }
 
 .avatar-card {
@@ -3372,7 +3388,20 @@ body.is-modal-open {
 }
 
 @media (max-width: 1040px) {
-  .sidebar,
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+
+  .main,
+  .is-sidebar-collapsed .main {
+    margin-left: var(--sidebar-collapsed-width);
+  }
+
   .avatar-card {
     position: relative;
     top: auto;
