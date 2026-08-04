@@ -21,8 +21,8 @@ for (const id of [
   assert(html.includes(`id="${id}"`), `Missing ${id}`);
 }
 
-assert(html.includes("Использовать демонстрационную работу"), "Missing demo document button");
-assert(html.includes("Демонстрационный автономный режим"), "Missing mock mode banner");
+assert(html.includes("Использовать пример работы"), "Missing sample document button");
+assert(!html.includes("Демонстрационный автономный режим"), "Mock mode banner must stay hidden from the main UI");
 assert(app.includes("Ctrl") || app.includes("ctrlKey"), "Missing presenter keyboard shortcut");
 assert(app.includes("requestImprovementDirection"), "Improvement direction must use a service");
 assert(app.includes("addHistoryItem"), "Missing local history save");

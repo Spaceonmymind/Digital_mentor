@@ -306,7 +306,7 @@ async function setFile(file) {
 
   const extension = getFileExtension(file.name);
   if (!["PDF", "DOCX"].includes(extension)) {
-    showNotification("Для демонстрации выберите файл PDF или DOCX.");
+    showNotification("Выберите файл PDF или DOCX.");
     return;
   }
 
@@ -336,12 +336,12 @@ async function useDemoDocument() {
   enableSpeech();
   try {
     const response = await fetch("/demo/sample-document.pdf");
-    if (!response.ok) throw new Error("Демонстрационный документ не найден.");
+    if (!response.ok) throw new Error("Пример работы не найден.");
     const blob = await response.blob();
     const file = new File([blob], "sample-document.pdf", { type: "application/pdf" });
     await setFile(file);
   } catch (error) {
-    showNotification(error.message || "Не удалось загрузить демонстрационный документ.");
+    showNotification(error.message || "Не удалось загрузить пример работы.");
   }
 }
 
@@ -495,13 +495,19 @@ function renderRecommendationPlan(items = recommendationPlan) {
     .map(
       (item) => `
         <article class="recommendation-card ${state.checkedRecommendations.has(item.priority) ? "is-checked" : ""}">
-          <strong>${item.priority}</strong>
-          <h3>${item.title}</h3>
+          <div class="recommendation-card__top">
+            <span class="recommendation-card__number">${item.priority}</span>
+            <h3>${item.title}</h3>
+          </div>
           <p>${item.description || "Рекомендация поможет повысить качество итоговой работы."}</p>
-          <p>Ожидаемый эффект: ${item.effect}</p>
-          <p>Сложность: ${item.complexity}</p>
-          <button class="button button--ghost" type="button" data-detail="${item.priority}">Подробнее</button>
-          <button class="button button--secondary" type="button" data-check-recommendation="${item.priority}">Учту при доработке</button>
+          <div class="recommendation-card__meta">
+            <span>${item.effect}</span>
+            <span>${item.complexity}</span>
+          </div>
+          <div class="recommendation-card__actions">
+            <button class="button button--ghost" type="button" data-detail="${item.priority}">Подробнее</button>
+            <button class="button button--secondary" type="button" data-check-recommendation="${item.priority}">Учту</button>
+          </div>
         </article>
       `,
     )
@@ -549,8 +555,8 @@ async function askMentor(question) {
     typing.remove();
     const answer = getMentorAnswer(question);
     addMessage("mentor", answer);
-    setMentor("error", error.message || "Не удалось получить ответ от backend.");
-    showNotification(error.message || "Не удалось получить ответ от backend.");
+    setMentor("error", error.message || "Не удалось получить ответ.");
+    showNotification(error.message || "Не удалось получить ответ.");
   }
 }
 
@@ -904,7 +910,7 @@ function bindEvents() {
     if (action === "mock") {
       window.localStorage.setItem("FRONTEND_MOCK_MODE", "true");
       elements.modeBanner.hidden = false;
-      showNotification("Автономный режим включен для следующего сценария.");
+      showNotification("Резервный режим включен для следующего сценария.");
     }
     if (action === "sound") {
       state.sound = !state.sound;

@@ -3,41 +3,41 @@ import { getPublicConfig } from "../api.js";
 
 export async function checkReadiness({ mascotImage }) {
   const checks = [];
-  checks.push({ component: "Frontend", status: "Готов", comment: "Интерфейс загружен" });
+  checks.push({ component: "Интерфейс", status: "Готов", comment: "Страница загружена" });
 
   try {
     const ready = await fetch("/health/ready");
     checks.push({
-      component: "Backend и БД",
+      component: "Сервис анализа",
       status: ready.ok ? "Готов" : "Требует внимания",
       comment: ready.ok ? "Сервис анализа доступен" : "Проверка готовности не прошла",
     });
   } catch {
-    checks.push({ component: "Backend и БД", status: "Недоступен", comment: "Не удалось получить readiness" });
+    checks.push({ component: "Сервис анализа", status: "Недоступен", comment: "Не удалось выполнить проверку" });
   }
 
   try {
     const demo = await fetch("/demo/sample-document.pdf", { method: "HEAD" });
     checks.push({
-      component: "Demo-документ",
+      component: "Пример работы",
       status: demo.ok ? "Готов" : "Недоступен",
       comment: demo.ok ? "Файл доступен" : "Файл не найден",
     });
   } catch {
-    checks.push({ component: "Demo-документ", status: "Недоступен", comment: "Не удалось проверить файл" });
+    checks.push({ component: "Пример работы", status: "Недоступен", comment: "Не удалось проверить файл" });
   }
 
   try {
     const config = await getPublicConfig();
-    checks.push({ component: "TTS-режим", status: "Определен", comment: config.tts_mode || "browser" });
+    checks.push({ component: "Голос", status: "Готов", comment: config.tts_mode || "browser" });
   } catch {
-    checks.push({ component: "TTS-режим", status: "Fallback", comment: "Будет использован голос браузера" });
+    checks.push({ component: "Голос", status: "Резерв", comment: "Будет использован голос браузера" });
   }
 
   checks.push({
     component: "Маскот",
     status: mascotImage?.complete ? "Готов" : "Проверяется",
-    comment: mascotImage?.currentSrc || mascotImage?.src || "Используется fallback",
+    comment: mascotImage?.currentSrc || mascotImage?.src || "Используется резервное изображение",
   });
   checks.push({ component: "PDF-отчет", status: "Готов", comment: "Формируется после завершения анализа" });
 
