@@ -3379,12 +3379,24 @@ body.is-modal-open {
 }
 
 .avatar-card {
-  position: sticky;
-  top: 18px;
-  align-self: start;
-  max-height: calc(100vh - 36px);
+  position: fixed;
+  top: 126px;
+  bottom: 18px;
+  left: calc(var(--sidebar-width) + clamp(18px, 2vw, 36px));
+  z-index: 20;
+  width: clamp(320px, 24vw, 430px);
+  max-height: calc(100vh - 144px);
   overflow: hidden auto;
   overscroll-behavior: contain;
+}
+
+.is-sidebar-collapsed .avatar-card {
+  left: calc(var(--sidebar-collapsed-width) + clamp(18px, 2vw, 36px));
+}
+
+.workspace {
+  grid-column: 2;
+  min-width: 0;
 }
 
 @media (max-width: 1040px) {
@@ -3405,8 +3417,15 @@ body.is-modal-open {
   .avatar-card {
     position: relative;
     top: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
     height: auto;
     max-height: none;
     overflow: visible;
+  }
+
+  .workspace {
+    grid-column: auto;
   }
 }
