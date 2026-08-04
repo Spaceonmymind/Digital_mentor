@@ -17,6 +17,7 @@ for (const id of [
   "finalStage",
   "presenterPanel",
   "historyList",
+  "recommendationModal",
 ]) {
   assert(html.includes(`id="${id}"`), `Missing ${id}`);
 }

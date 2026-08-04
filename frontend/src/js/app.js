@@ -34,6 +34,7 @@ const state = {
   uiState: "welcome",
   result: null,
   checkedRecommendations: new Set(),
+  activeRecommendation: null,
   lastSpokenStep: "",
 };
 
@@ -110,6 +111,16 @@ const elements = {
   errorTitle: document.getElementById("errorTitle"),
   errorDescription: document.getElementById("errorDescription"),
   errorRequestId: document.getElementById("errorRequestId"),
+  recommendationModal: document.getElementById("recommendationModal"),
+  recommendationModalClose: document.getElementById("recommendationModalClose"),
+  recommendationModalOk: document.getElementById("recommendationModalOk"),
+  recommendationModalAccept: document.getElementById("recommendationModalAccept"),
+  recommendationModalPriority: document.getElementById("recommendationModalPriority"),
+  recommendationModalTitle: document.getElementById("recommendationModalTitle"),
+  recommendationModalDescription: document.getElementById("recommendationModalDescription"),
+  recommendationModalEffect: document.getElementById("recommendationModalEffect"),
+  recommendationModalComplexity: document.getElementById("recommendationModalComplexity"),
+  recommendationModalAction: document.getElementById("recommendationModalAction"),
   retryButton: document.getElementById("retryButton"),
   fullscreenButton: document.getElementById("fullscreenButton"),
   nextStageButton: document.getElementById("nextStageButton"),
@@ -353,7 +364,9 @@ function resetScenario() {
   state.result = null;
   state.remarks = documentRemarks;
   state.checkedRecommendations = new Set();
+  state.activeRecommendation = null;
   state.lastSpokenStep = "";
+  closeRecommendationModal();
   elements.fileInput.value = "";
   elements.filePreview.hidden = true;
   elements.startAnalysisButton.disabled = true;
@@ -490,13 +503,74 @@ function renderRemark() {
     .join("");
 }
 
+function getRecommendationNumber(priority) {
+  return String(priority || "")
+    .match(/\d+/)?.[0] || String(priority || "1");
+}
+
+function getRecommendationAction(item) {
+  const title = item?.title || "Доработать выбранный пункт.";
+  const normalized = title.toLowerCase();
+  if (normalized.includes("методолог")) {
+    return "Добавьте отдельный короткий подраздел: цель метода, выборка или объект анализа, критерии оценки и способ интерпретации результатов.";
+  }
+  if (normalized.includes("сравнитель")) {
+    return "Соберите 3-5 аналогов, задайте единые критерии сравнения и покажите, чем предложенное решение отличается по ценности и применимости.";
+  }
+  if (normalized.includes("вывод")) {
+    return "После ключевых разделов добавьте авторские выводы: что получилось доказать, какие ограничения есть и какой практический смысл имеет результат.";
+  }
+  if (normalized.includes("источник")) {
+    return "Подберите дополнительные актуальные источники, свяжите каждый источник с конкретным тезисом и обновите список литературы.";
+  }
+  return "Сформулируйте конкретное изменение, добавьте подтверждающие материалы и проверьте, что доработка отражена в выводах.";
+}
+
+function openRecommendationModal(item) {
+  if (!item) return;
+  state.activeRecommendation = item;
+  elements.recommendationModalPriority.textContent = getRecommendationNumber(item.priority);
+  elements.recommendationModalTitle.textContent = item.title;
+  elements.recommendationModalDescription.textContent =
+    item.description || "Эта доработка поможет сделать работу убедительнее и понятнее для эксперта.";
+  elements.recommendationModalEffect.textContent = item.effect || "Повысит качество работы";
+  elements.recommendationModalComplexity.textContent = item.complexity || "Средняя";
+  elements.recommendationModalAction.textContent = getRecommendationAction(item);
+  elements.recommendationModal.hidden = false;
+  document.body.classList.add("is-modal-open");
+  elements.recommendationModalOk.focus();
+}
+
+function closeRecommendationModal() {
+  elements.recommendationModal.hidden = true;
+  document.body.classList.remove("is-modal-open");
+}
+
+function toggleRecommendationChecked(priority) {
+  if (state.checkedRecommendations.has(priority)) {
+    state.checkedRecommendations.delete(priority);
+  } else {
+    state.checkedRecommendations.add(priority);
+  }
+  renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
+}
+
+function markRecommendationChecked(priority) {
+  state.checkedRecommendations.add(priority);
+  renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
+}
+
+
 function renderRecommendationPlan(items = recommendationPlan) {
   elements.recommendationPlan.innerHTML = items
     .map(
       (item) => `
         <article class="recommendation-card ${state.checkedRecommendations.has(item.priority) ? "is-checked" : ""}">
           <div class="recommendation-card__top">
-            <span class="recommendation-card__number">${item.priority}</span>
+            <div class="recommendation-card__number">
+              <span>Приоритет</span>
+              <strong>${getRecommendationNumber(item.priority)}</strong>
+            </div>
             <h3>${item.title}</h3>
           </div>
           <p>${item.description || "Рекомендация поможет повысить качество итоговой работы."}</p>
@@ -836,18 +910,30 @@ function bindEvents() {
   elements.recommendationPlan.addEventListener("click", (event) => {
     const checkButton = event.target.closest("[data-check-recommendation]");
     if (checkButton) {
-      const key = checkButton.dataset.checkRecommendation;
-      if (state.checkedRecommendations.has(key)) {
-        state.checkedRecommendations.delete(key);
-      } else {
-        state.checkedRecommendations.add(key);
-      }
-      renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
+      toggleRecommendationChecked(checkButton.dataset.checkRecommendation);
       return;
     }
     const button = event.target.closest("[data-detail]");
     if (!button) return;
-    showNotification(`${button.dataset.detail}: подробная карточка будет подключена на следующем этапе.`);
+    const items = state.result?.recommendations || recommendationPlan;
+    openRecommendationModal(items.find((item) => item.priority === button.dataset.detail));
+  });
+
+  elements.recommendationModalClose.addEventListener("click", closeRecommendationModal);
+  elements.recommendationModalOk.addEventListener("click", closeRecommendationModal);
+  elements.recommendationModal.addEventListener("click", (event) => {
+    if (event.target === elements.recommendationModal) closeRecommendationModal();
+  });
+  elements.recommendationModalAccept.addEventListener("click", () => {
+    if (state.activeRecommendation) {
+      markRecommendationChecked(state.activeRecommendation.priority);
+    }
+    closeRecommendationModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.recommendationModal.hidden) {
+      closeRecommendationModal();
+    }
   });
 
   elements.historyList.addEventListener("click", (event) => {

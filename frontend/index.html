@@ -397,6 +397,35 @@
     </div>
 
     <div class="notification" id="notification" role="status" aria-live="polite"></div>
+    <div class="modal-overlay" id="recommendationModal" hidden>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recommendationModalTitle">
+        <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
+          <span data-icon="x"></span>
+        </button>
+        <div class="modal-card__badge" id="recommendationModalPriority">1</div>
+        <p class="eyebrow">Рекомендация</p>
+        <h2 id="recommendationModalTitle">План доработки</h2>
+        <p id="recommendationModalDescription"></p>
+        <div class="modal-card__grid">
+          <div>
+            <span>Эффект</span>
+            <strong id="recommendationModalEffect"></strong>
+          </div>
+          <div>
+            <span>Сложность</span>
+            <strong id="recommendationModalComplexity"></strong>
+          </div>
+        </div>
+        <div class="modal-card__section">
+          <h3>Что сделать</h3>
+          <p id="recommendationModalAction"></p>
+        </div>
+        <div class="modal-card__actions">
+          <button class="button" type="button" id="recommendationModalAccept">Учту</button>
+          <button class="button button--secondary" type="button" id="recommendationModalOk">Понятно</button>
+        </div>
+      </section>
+    </div>
     <aside class="presenter-panel" id="presenterPanel" hidden aria-label="Панель ведущего">
       <div class="presenter-panel__header">
         <strong>Панель ведущего</strong>
