@@ -123,7 +123,6 @@ const elements = {
   recommendationModalAction: document.getElementById("recommendationModalAction"),
   retryButton: document.getElementById("retryButton"),
   fullscreenButton: document.getElementById("fullscreenButton"),
-  nextStageButton: document.getElementById("nextStageButton"),
   presenterPanel: document.getElementById("presenterPanel"),
   presenterCloseButton: document.getElementById("presenterCloseButton"),
   readinessTable: document.getElementById("readinessTable"),
@@ -773,15 +772,6 @@ function beginWork() {
   );
 }
 
-function goNextStage() {
-  if (state.uiState === "welcome") beginWork();
-  else if (state.uiState === "upload" && state.document?.id) startAnalysis();
-  else if (state.uiState === "summary") showStage("results");
-  else if (state.uiState === "results") showStage("final");
-  else if (state.uiState === "final") resetScenario();
-  else showNotification("Дождитесь завершения текущего этапа.");
-}
-
 function configureSpeechService(ttsMode) {
   const browser = new BrowserSpeechService();
   if (ttsMode === "remote") {
@@ -861,7 +851,6 @@ function bindEvents() {
   elements.backToResultsButton.addEventListener("click", () => showStage("results"));
   elements.retryButton.addEventListener("click", resetScenario);
   elements.fullscreenButton.addEventListener("click", openFullscreen);
-  elements.nextStageButton.addEventListener("click", goNextStage);
   elements.clearChatButton.addEventListener("click", () => renderChat());
   elements.stopSpeechButton.addEventListener("click", stopSpeech);
 

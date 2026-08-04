@@ -3350,3 +3350,34 @@ body.is-modal-open {
     border-radius: 12px;
   }
 }
+
+/* Persistent navigation and mentor */
+.sidebar {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.avatar-card {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  max-height: calc(100vh - 36px);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 1040px) {
+  .sidebar,
+  .avatar-card {
+    position: relative;
+    top: auto;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+}
