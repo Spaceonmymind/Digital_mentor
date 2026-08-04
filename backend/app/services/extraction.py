@@ -25,7 +25,7 @@ class TextExtractionService:
         try:
             doc = fitz.open(file_path)
         except Exception as exc:
-            raise AppError("DOCUMENT_OPEN_FAILED", "Не удалось открыть PDF-документ") from exc
+            raise AppError("DOCUMENT_CORRUPTED", "PDF-документ поврежден или не может быть открыт", status_code=422) from exc
 
         pages = []
         full_text_parts = []
@@ -71,7 +71,7 @@ class TextExtractionService:
         try:
             doc = DocxDocument(file_path)
         except Exception as exc:
-            raise AppError("DOCUMENT_OPEN_FAILED", "Не удалось открыть DOCX-документ") from exc
+            raise AppError("DOCUMENT_CORRUPTED", "DOCX-документ поврежден или не может быть открыт", status_code=422) from exc
 
         paragraphs = []
         full_text_parts = []

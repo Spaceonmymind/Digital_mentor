@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 from uuid import uuid4
 
 from fastapi import UploadFile
@@ -57,3 +58,41 @@ class DocumentStorage:
         directory = self.extracted_dir / document_id
         directory.mkdir(parents=True, exist_ok=True)
         return directory / "content.json"
+
+    def extracted_directory(self, document_id: str) -> Path:
+        return (self.extracted_dir / document_id).resolve()
+
+    def report_directory(self, analysis_id: str) -> Path:
+        directory = (self.reports_dir / analysis_id).resolve()
+        if not str(directory).startswith(str(self.reports_dir.resolve())):
+            raise ValueError("Invalid report path")
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    def report_path(self, analysis_id: str, report_id: str) -> Path:
+        path = (self.report_directory(analysis_id) / f"{report_id}.pdf").resolve()
+        if not str(path).startswith(str(self.reports_dir.resolve())):
+            raise ValueError("Invalid report path")
+        return path
+
+    def audio_directory(self) -> Path:
+        directory = (self.root / "audio").resolve()
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory
+
+    def audio_path(self, audio_id: str) -> Path:
+        path = (self.audio_directory() / f"{audio_id}.mp3").resolve()
+        if not str(path).startswith(str(self.audio_directory().resolve())):
+            raise ValueError("Invalid audio path")
+        return path
+
+    def delete_tree(self, path: Path | str | None) -> None:
+        if not path:
+            return
+        resolved = Path(path).resolve()
+        if not str(resolved).startswith(str(self.root.resolve())):
+            raise ValueError("Invalid storage path")
+        if resolved.is_dir():
+            shutil.rmtree(resolved, ignore_errors=True)
+        elif resolved.exists():
+            resolved.unlink()

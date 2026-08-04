@@ -3,7 +3,7 @@ import json
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,10 @@ from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisEvent, AnalysisResult, Document
 from app.db.session import get_session
 from app.schemas.analyses import AnalysisCreateRequest, AnalysisCreateResponse, AnalysisEventResponse, AnalysisStatusResponse
+from app.schemas.reports import ReportResponse
 from app.schemas.results import AnalysisResultPayload
+from app.services.reports import ReportService
+from app.services.storage import DocumentStorage
 from app.workers.analysis_tasks import run_analysis_task
 
 logger = logging.getLogger(__name__)
@@ -152,3 +155,32 @@ async def cancel_analysis(analysis_id: str, session: AsyncSession = Depends(get_
     await session.refresh(analysis)
     logger.info("analysis_cancel_requested analysis_id=%s", analysis_id)
     return _status_response(analysis, "Анализ отменен пользователем")
+
+
+@router.post("/{analysis_id}/reports", response_model=ReportResponse)
+async def create_report(analysis_id: str, session: AsyncSession = Depends(get_session)) -> ReportResponse:
+    analysis = await session.get(Analysis, analysis_id)
+    if analysis is None:
+        raise AppError("ANALYSIS_NOT_FOUND", "Анализ не найден", status_code=404)
+    document = await session.get(Document, analysis.document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    result = (await session.execute(select(AnalysisResult).where(AnalysisResult.analysis_id == analysis_id))).scalar_one_or_none()
+    if result is None:
+        raise AppError("ANALYSIS_NOT_COMPLETED", "Результат еще не сформирован", status_code=409)
+    try:
+        report = ReportService().create_pdf_report(analysis, document, result)
+    except AppError:
+        raise
+    except Exception as exc:
+        raise AppError("REPORT_GENERATION_FAILED", "Не удалось сформировать отчет", status_code=500) from exc
+    logger.info("report_created analysis_id=%s report_id=%s", analysis_id, report.report_id)
+    return report
+
+
+@router.get("/{analysis_id}/reports/{report_id}")
+async def get_report(analysis_id: str, report_id: str) -> FileResponse:
+    path = DocumentStorage().report_path(analysis_id, report_id)
+    if not path.exists():
+        raise AppError("REPORT_NOT_FOUND", "Отчет не найден", status_code=404)
+    return FileResponse(path, media_type="application/pdf", filename=f"digital-mentor-report-{report_id}.pdf")

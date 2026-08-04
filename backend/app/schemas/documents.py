@@ -10,3 +10,8 @@ class DocumentResponse(BaseModel):
     size: int
     status: str
     created_at: datetime
+
+
+class DocumentContentResponse(BaseModel):
+    document_id: str
+    content: dict

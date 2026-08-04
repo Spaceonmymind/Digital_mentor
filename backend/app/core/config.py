@@ -25,6 +25,13 @@ class Settings:
         if item.strip()
     )
     mock_analysis_enabled: bool = _bool_env("MOCK_ANALYSIS_ENABLED", True)
+    demo_mode: bool = _bool_env("DEMO_MODE", True)
+    frontend_mock_mode: bool = _bool_env("FRONTEND_MOCK_MODE", False)
+    tts_mode: str = os.getenv("TTS_MODE", "browser")
+    tts_max_text_length: int = int(os.getenv("TTS_MAX_TEXT_LENGTH", "700"))
+    document_retention_hours: int = int(os.getenv("DOCUMENT_RETENTION_HOURS", "24"))
+    audio_retention_minutes: int = int(os.getenv("AUDIO_RETENTION_MINUTES", "60"))
+    report_retention_hours: int = int(os.getenv("REPORT_RETENTION_HOURS", "24"))
     mock_analysis_step_delay: float = float(os.getenv("MOCK_ANALYSIS_STEP_DELAY", "1.5"))
     cors_origins: tuple[str, ...] = tuple(
         item.strip()

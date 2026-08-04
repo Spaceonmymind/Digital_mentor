@@ -1,16 +1,19 @@
 import logging
 import mimetypes
 import zipfile
+import json
 from pathlib import PurePath
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Query, UploadFile
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
-from app.db.models import Document
+from app.db.models import Analysis, Document
 from app.db.session import get_session
-from app.schemas.documents import DocumentResponse
+from app.schemas.documents import DocumentContentResponse, DocumentResponse
 from app.services.extraction import TextExtractionService
 from app.services.security import StubFileSecurityService
 from app.services.storage import DocumentStorage
@@ -124,4 +127,60 @@ async def get_document(document_id: str, session: AsyncSession = Depends(get_ses
     document = await session.get(Document, document_id)
     if document is None or document.deleted_at is not None:
         raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    return _document_response(document)
+
+
+@router.get("/{document_id}/content", response_model=DocumentContentResponse)
+async def get_document_content(document_id: str, session: AsyncSession = Depends(get_session)) -> DocumentContentResponse:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    if document.extraction_status != "completed" or not document.extracted_path:
+        raise AppError("DOCUMENT_TEXT_NOT_FOUND", "Извлеченный текст документа не найден", status_code=404)
+
+    path = DocumentStorage().extracted_directory(document_id) / "content.json"
+    if not path.exists():
+        raise AppError("DOCUMENT_TEXT_NOT_FOUND", "Извлеченный текст документа не найден", status_code=404)
+    return DocumentContentResponse(document_id=document_id, content=json.loads(path.read_text(encoding="utf-8")))
+
+
+@router.delete("/{document_id}", response_model=DocumentResponse)
+async def delete_document(
+    document_id: str,
+    force: bool = Query(default=False),
+    session: AsyncSession = Depends(get_session),
+) -> DocumentResponse:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+
+    active = (
+        await session.execute(
+            select(Analysis).where(
+                Analysis.document_id == document_id,
+                Analysis.status.in_(["queued", "processing"]),
+            )
+        )
+    ).scalars().all()
+    if active and not force:
+        raise AppError("DOCUMENT_HAS_ACTIVE_ANALYSIS", "Сначала отмените активный анализ или используйте force=true", status_code=409)
+
+    for analysis in active:
+        analysis.status = "cancelled"
+        analysis.error_message = "ANALYSIS_CANCELLED"
+
+    storage = DocumentStorage()
+    storage.delete(document.stored_name)
+    storage.delete_tree(storage.extracted_directory(document_id))
+    related_analyses = (
+        await session.execute(select(Analysis).where(Analysis.document_id == document_id))
+    ).scalars().all()
+    for analysis in related_analyses:
+        storage.delete_tree(storage.reports_dir / analysis.id)
+
+    document.status = "deleted"
+    document.deleted_at = datetime.now(timezone.utc)
+    await session.commit()
+    await session.refresh(document)
+    logger.info("document_deleted document_id=%s", document.id)
     return _document_response(document)
