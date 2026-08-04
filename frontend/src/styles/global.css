@@ -3380,12 +3380,12 @@ body.is-modal-open {
 
 .avatar-card {
   position: fixed;
-  top: 126px;
-  bottom: 18px;
+  top: 174px;
+  bottom: auto;
   left: calc(var(--sidebar-width) + clamp(18px, 2vw, 36px));
   z-index: 20;
   width: clamp(320px, 24vw, 430px);
-  max-height: calc(100vh - 144px);
+  max-height: calc(100vh - 198px);
   overflow: hidden auto;
   overscroll-behavior: contain;
 }
