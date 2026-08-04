@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
-from textwrap import wrap
+from pathlib import Path
 from uuid import uuid4
+
+import fitz
 
 from app.core.config import settings
 from app.core.errors import AppError
@@ -9,13 +11,16 @@ from app.schemas.reports import ReportResponse
 from app.services.storage import DocumentStorage
 
 
-def _pdf_escape(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-
 class ReportService:
+    page_width = 595
+    page_height = 842
+    margin = 50
+    line_height = 15
+
     def __init__(self, storage: DocumentStorage | None = None):
         self.storage = storage or DocumentStorage()
+        self.font_regular = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Golos-Text_Regular.ttf"
+        self.font_bold = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "Golos-Text_Bold.ttf"
 
     def create_pdf_report(self, analysis: Analysis, document: Document, result: AnalysisResult) -> ReportResponse:
         if analysis.status != "completed":
@@ -69,33 +74,62 @@ class ReportService:
         return lines
 
     def _render_pdf(self, lines: list[str]) -> bytes:
-        text_commands = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL"]
+        doc = fitz.open()
+        regular_font = fitz.Font(fontfile=str(self.font_regular))
+        page = self._new_page(doc)
+        y = self.margin
+
         for raw_line in lines:
-            for line in wrap(raw_line, width=88) or [""]:
-                safe_line = _pdf_escape(line)
-                text_commands.append(f"({safe_line}) Tj")
-                text_commands.append("T*")
-        text_commands.append("ET")
-        stream = "\n".join(text_commands).encode("utf-8")
-        objects = [
-            b"<< /Type /Catalog /Pages 2 0 R >>",
-            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-            b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
-        ]
-        content = bytearray(b"%PDF-1.4\n")
-        offsets = [0]
-        for index, obj in enumerate(objects, start=1):
-            offsets.append(len(content))
-            content.extend(f"{index} 0 obj\n".encode("ascii"))
-            content.extend(obj)
-            content.extend(b"\nendobj\n")
-        xref = len(content)
-        content.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode("ascii"))
-        for offset in offsets[1:]:
-            content.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
-        content.extend(
-            f"trailer << /Root 1 0 R /Size {len(objects) + 1} >>\nstartxref\n{xref}\n%%EOF\n".encode("ascii")
-        )
-        return bytes(content)
+            is_title = raw_line == "Цифровой ментор. Итоговый отчет"
+            is_section = raw_line.endswith(":") and not raw_line.startswith("-")
+            fontname = "GolosBold" if is_title or is_section else "Golos"
+            fontsize = 18 if is_title else 13 if is_section else 11
+            color = (0.08, 0.15, 0.17) if is_title else (0.15, 0.4, 0.41) if is_section else (0.1, 0.1, 0.1)
+            spacing_after = 9 if is_title else 6 if is_section else 2
+
+            wrapped_lines = self._wrap_line(raw_line, regular_font, fontsize)
+            if not wrapped_lines:
+                y += self.line_height
+                continue
+
+            for line in wrapped_lines:
+                if y > self.page_height - self.margin:
+                    page = self._new_page(doc)
+                    y = self.margin
+                page.insert_text(
+                    (self.margin, y),
+                    line,
+                    fontname=fontname,
+                    fontsize=fontsize,
+                    color=color,
+                )
+                y += self.line_height if fontsize <= 11 else self.line_height + 5
+            y += spacing_after
+
+        payload = doc.tobytes(garbage=4, deflate=True)
+        doc.close()
+        return payload
+
+    def _new_page(self, doc: fitz.Document) -> fitz.Page:
+        page = doc.new_page(width=self.page_width, height=self.page_height)
+        page.insert_font(fontname="Golos", fontfile=str(self.font_regular))
+        page.insert_font(fontname="GolosBold", fontfile=str(self.font_bold))
+        return page
+
+    def _wrap_line(self, text: str, font: fitz.Font, fontsize: int) -> list[str]:
+        if not text:
+            return []
+        max_width = self.page_width - self.margin * 2
+        result: list[str] = []
+        current = ""
+        for word in text.split():
+            candidate = f"{current} {word}".strip()
+            if font.text_length(candidate, fontsize=fontsize) <= max_width:
+                current = candidate
+                continue
+            if current:
+                result.append(current)
+            current = word
+        if current:
+            result.append(current)
+        return result

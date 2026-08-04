@@ -3,6 +3,7 @@ import io
 
 import fitz
 import pytest
+import fitz
 from docx import Document as DocxDocument
 from sqlalchemy import select
 
@@ -234,6 +235,12 @@ async def test_create_analysis_progress_and_result(client):
     pdf_response = await client.get(report["report_url"])
     assert pdf_response.status_code == 200
     assert pdf_response.content.startswith(b"%PDF")
+    pdf = fitz.open(stream=pdf_response.content, filetype="pdf")
+    extracted_text = "\n".join(page.get_text() for page in pdf)
+    pdf.close()
+    assert "Цифровой ментор" in extracted_text
+    assert "Итоговый отчет" in extracted_text
+    assert "Общий балл" in extracted_text
 
 
 @pytest.mark.asyncio
