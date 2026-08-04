@@ -1,3 +1,76 @@
+import { synthesizeSpeech } from "../api.js";
+
+
+export class RemoteTtsSpeechService {
+  constructor({ fallback, onFallback } = {}) {
+    this.fallback = fallback;
+    this.onFallback = onFallback;
+    this.audio = null;
+    this.failed = false;
+    this.ready = false;
+  }
+
+  isAvailable() {
+    return !this.failed || Boolean(this.fallback?.isAvailable());
+  }
+
+  enable() {
+    this.ready = true;
+    this.fallback?.enable();
+  }
+
+  loadVoices() {
+    this.fallback?.loadVoices();
+  }
+
+  async speak(text, { force = false, onStart, onEnd } = {}) {
+    if (!this.ready || this.failed) {
+      return this.fallback?.speak(text, { force, onStart, onEnd });
+    }
+    this.stop();
+    try {
+      const result = await synthesizeSpeech({ text, voice_id: "mentor-default" });
+      this.audio = new Audio(result.audio_url);
+      this.audio.onplay = () => onStart?.();
+      this.audio.onended = () => onEnd?.();
+      this.audio.onerror = () => {
+        this.failed = true;
+        this.onFallback?.();
+        this.fallback?.speak(text, { force: true, onStart, onEnd });
+      };
+      await this.audio.play();
+    } catch (error) {
+      this.failed = true;
+      this.onFallback?.();
+      return this.fallback?.speak(text, { force: true, onStart, onEnd });
+    }
+  }
+
+  stop() {
+    if (this.audio) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
+    }
+    this.fallback?.stop();
+  }
+}
+
+
+export class DisabledSpeechService {
+  isAvailable() {
+    return false;
+  }
+
+  enable() {}
+
+  loadVoices() {}
+
+  async speak() {}
+
+  stop() {}
+}
+
+
 export class BrowserSpeechService {
   constructor() {
     this.ready = false;

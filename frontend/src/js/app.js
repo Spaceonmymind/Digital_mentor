@@ -7,11 +7,13 @@ import {
   recommendationPlan,
 } from "../mocks/mentorAnalysis.js";
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
+import { FRONTEND_MOCK_MODE } from "./config.js";
 import { renderIcons } from "./icons.js";
+import { createReport, getPublicConfig } from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
-import { BrowserSpeechService, BrowserSttService } from "./modules/speech.js";
+import { BrowserSpeechService, BrowserSttService, DisabledSpeechService, RemoteTtsSpeechService } from "./modules/speech.js";
 import { MascotController } from "./modules/mascot.js";
 
 const state = {
@@ -24,6 +26,8 @@ const state = {
   activeRemark: 0,
   remarks: documentRemarks,
   sidebarCollapsed: true,
+  publicConfig: { demo_mode: false, frontend_mock_mode: false, tts_mode: "browser" },
+  speechToken: 0,
 };
 
 const elements = {
@@ -70,9 +74,12 @@ const elements = {
   avatarSoundButton: document.getElementById("avatarSoundButton"),
   resetButton: document.getElementById("resetButton"),
   notification: document.getElementById("notification"),
+  modeBanner: document.getElementById("modeBanner"),
+  demoDocumentButton: document.getElementById("demoDocumentButton"),
+  reportButton: document.getElementById("reportButton"),
 };
 
-const speechService = new BrowserSpeechService();
+let speechService = new BrowserSpeechService();
 const sttService = new BrowserSttService({
   onStart: () => {
     state.isListening = true;
@@ -141,14 +148,20 @@ function enableSpeech() {
 
 function speakMentor(message, force = false) {
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
+  const token = ++state.speechToken;
   speechService.speak(message, {
     force,
-    onStart: () => mascot.setMascotState({ state: "speaking", message }),
-    onEnd: () => mascot.setMascotState({ state: state.analysisId ? "success" : "idle", message }),
+    onStart: () => {
+      if (token === state.speechToken) mascot.setMascotState({ state: "speaking", message });
+    },
+    onEnd: () => {
+      if (token === state.speechToken) mascot.setMascotState({ state: state.analysisId ? "success" : "idle", message });
+    },
   });
 }
 
 function stopSpeech() {
+  state.speechToken += 1;
   speechService.stop();
   mascot.setMascotState({ state: state.analysisId ? "success" : "idle" });
 }
@@ -195,6 +208,7 @@ function showStage(stageName) {
 }
 
 function showPage(section) {
+  stopSpeech();
   Object.values(elements.pages).forEach((page) => page.classList.remove("is-visible"));
   elements.pages[section].classList.add("is-visible");
 
@@ -257,6 +271,19 @@ async function setFile(file) {
     elements.startAnalysisButton.disabled = true;
     setMentor("error", error.message || "Не удалось загрузить документ.");
     showNotification(error.message || "Не удалось загрузить документ.");
+  }
+}
+
+async function useDemoDocument() {
+  enableSpeech();
+  try {
+    const response = await fetch("/demo/sample-document.pdf");
+    if (!response.ok) throw new Error("Демонстрационный документ не найден.");
+    const blob = await response.blob();
+    const file = new File([blob], "sample-document.pdf", { type: "application/pdf" });
+    await setFile(file);
+  } catch (error) {
+    showNotification(error.message || "Не удалось загрузить демонстрационный документ.");
   }
 }
 
@@ -460,6 +487,47 @@ async function startAnalysis() {
   }
 }
 
+async function downloadReport() {
+  if (!state.analysisId) {
+    showNotification("Сначала завершите анализ документа.");
+    return;
+  }
+  try {
+    const report = await createReport(state.analysisId);
+    window.open(report.report_url, "_blank", "noopener");
+    showNotification("Отчет сформирован.");
+  } catch (error) {
+    showNotification(error.message || "Не удалось сформировать отчет.");
+  }
+}
+
+function configureSpeechService(ttsMode) {
+  const browser = new BrowserSpeechService();
+  if (ttsMode === "remote") {
+    speechService = new RemoteTtsSpeechService({
+      fallback: browser,
+      onFallback: () => showNotification("Серверная озвучка недоступна, включен голос браузера."),
+    });
+  } else if (ttsMode === "disabled") {
+    speechService = new DisabledSpeechService();
+  } else {
+    speechService = browser;
+  }
+}
+
+async function loadPublicConfig() {
+  try {
+    const config = await getPublicConfig();
+    state.publicConfig = config;
+    configureSpeechService(config.tts_mode);
+    elements.demoDocumentButton.hidden = !config.demo_mode;
+    elements.modeBanner.hidden = !(config.frontend_mock_mode || FRONTEND_MOCK_MODE);
+  } catch (error) {
+    configureSpeechService("browser");
+    elements.modeBanner.hidden = !FRONTEND_MOCK_MODE;
+  }
+}
+
 function bindEvents() {
   if (isSpeechSupported()) {
     loadVoices();
@@ -491,6 +559,8 @@ function bindEvents() {
     enableSpeech();
     resetScenario();
   });
+  elements.demoDocumentButton.addEventListener("click", useDemoDocument);
+  elements.reportButton.addEventListener("click", downloadReport);
 
   ["dragenter", "dragover"].forEach((eventName) => {
     elements.dropZone.addEventListener(eventName, (event) => {
@@ -575,10 +645,15 @@ function bindEvents() {
   });
 }
 
-renderIcons();
-renderAnalysisSteps();
-bindEvents();
-setSidebarCollapsed(true);
-updateSoundButton();
-updateMicButton();
-resetScenario();
+async function init() {
+  await loadPublicConfig();
+  renderIcons();
+  renderAnalysisSteps();
+  bindEvents();
+  setSidebarCollapsed(true);
+  updateSoundButton();
+  updateMicButton();
+  resetScenario();
+}
+
+init();

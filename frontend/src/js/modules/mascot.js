@@ -33,11 +33,17 @@ export class MascotController {
   }
 
   tryImage(candidates, index) {
-    if (index >= candidates.length) return;
+    if (index >= candidates.length) {
+      this.card.classList.add("is-mascot-placeholder");
+      this.image.hidden = true;
+      return;
+    }
     const candidate = candidates[index];
     if (this.image.getAttribute("src") === candidate) return;
     const probe = new Image();
     probe.onload = () => {
+      this.card.classList.remove("is-mascot-placeholder");
+      this.image.hidden = false;
       this.image.src = candidate;
     };
     probe.onerror = () => this.tryImage(candidates, index + 1);

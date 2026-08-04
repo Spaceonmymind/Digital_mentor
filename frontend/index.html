@@ -61,6 +61,7 @@
             </button>
           </div>
         </header>
+        <div class="mode-banner" id="modeBanner" hidden>Демонстрационный автономный режим</div>
 
         <section class="page is-visible" id="mentorPage">
           <div class="mentor-layout">
@@ -103,6 +104,10 @@
                     <h3>Перетащите файл сюда</h3>
                     <p>Поддерживаемые форматы: PDF, DOCX</p>
                     <button class="button" type="button" id="chooseFileButton">Выбрать файл</button>
+                    <button class="button button--ghost demo-document-button" type="button" id="demoDocumentButton" hidden>
+                      <span data-icon="file-check-2"></span>
+                      Использовать демонстрационный документ
+                    </button>
                   </div>
 
                   <div class="file-preview" id="filePreview" hidden>
@@ -237,6 +242,19 @@
                       Отправить
                     </button>
                   </form>
+                </section>
+                <section class="card report-card">
+                  <div class="section-heading">
+                    <span data-icon="download"></span>
+                    <div>
+                      <h2>Итоговый отчет</h2>
+                      <p>PDF-отчет формируется backend на основе сохраненного результата анализа.</p>
+                    </div>
+                  </div>
+                  <button class="button" type="button" id="reportButton">
+                    <span data-icon="download"></span>
+                    Скачать отчет
+                  </button>
                 </section>
               </div>
             </section>

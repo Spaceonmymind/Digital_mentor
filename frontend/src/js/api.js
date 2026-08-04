@@ -28,6 +28,12 @@ export async function uploadDocument(file) {
 }
 
 
+export async function getPublicConfig() {
+  const response = await fetch(`${API_BASE_URL}/config`);
+  return parseResponse(response);
+}
+
+
 export async function getDocument(documentId) {
   const response = await fetch(`${API_BASE_URL}/documents/${documentId}`);
   return parseResponse(response);
@@ -69,6 +75,32 @@ export async function sendChatMessage(payload) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
+}
+
+
+export async function synthesizeSpeech(payload) {
+  const response = await fetch(`${API_BASE_URL}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse(response);
+}
+
+
+export async function createReport(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/reports`, {
+    method: "POST",
+  });
+  return parseResponse(response);
+}
+
+
+export async function deleteDocument(documentId, { force = false } = {}) {
+  const response = await fetch(`${API_BASE_URL}/documents/${documentId}?force=${force ? "true" : "false"}`, {
+    method: "DELETE",
   });
   return parseResponse(response);
 }
