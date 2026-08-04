@@ -1,7 +1,16 @@
 .venv/
 .idea/
+.pytest_cache/
 __pycache__/
 *.pyc
+*.py[cod]
 .DS_Store
 .docker-build-config/
 brandbook/
+.env
+storage/documents/*
+storage/extracted/*
+storage/reports/*
+!storage/documents/.gitkeep
+!storage/extracted/.gitkeep
+!storage/reports/.gitkeep

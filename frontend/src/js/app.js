@@ -8,17 +8,21 @@ import {
 } from "../mocks/mentorAnalysis.js";
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
 import { renderIcons } from "./icons.js";
+import { uploadDocument } from "./modules/upload.js";
+import { runAnalysis } from "./modules/analysis.js";
+import { askMentorApi } from "./modules/chat.js";
+import { BrowserSpeechService, BrowserSttService } from "./modules/speech.js";
+import { MascotController } from "./modules/mascot.js";
 
 const state = {
   file: null,
+  document: null,
+  analysisId: null,
   sound: false,
   speechReady: false,
-  voices: [],
-  selectedVoice: null,
-  lastSpokenMessage: "",
-  recognition: null,
   isListening: false,
   activeRemark: 0,
+  remarks: documentRemarks,
   sidebarCollapsed: true,
 };
 
@@ -31,6 +35,8 @@ const elements = {
     about: document.getElementById("aboutPage"),
   },
   avatarCard: document.querySelector(".avatar-card"),
+  mascotImage: document.querySelector(".mascot-image"),
+  voiceWave: document.querySelector(".voice-wave"),
   mentorStatus: document.getElementById("mentorStatus"),
   mentorMessage: document.getElementById("mentorMessage"),
   uploadStage: document.getElementById("uploadStage"),
@@ -66,6 +72,48 @@ const elements = {
   notification: document.getElementById("notification"),
 };
 
+const speechService = new BrowserSpeechService();
+const sttService = new BrowserSttService({
+  onStart: () => {
+    state.isListening = true;
+    updateMicButton();
+    elements.chatInput.placeholder = "Слушаю вопрос...";
+    showNotification("Говорите, я слушаю.");
+  },
+  onResult: (transcript) => {
+    if (transcript) {
+      elements.chatInput.value = transcript;
+    }
+  },
+  onFinal: (transcript) => {
+    elements.chatInput.value = "";
+    enableSpeech();
+    askMentor(transcript);
+  },
+  onError: (errorCode) => {
+    const messages = {
+      "not-allowed": "Браузер не получил доступ к микрофону.",
+      "no-speech": "Речь не распознана. Попробуйте еще раз.",
+      "audio-capture": "Микрофон не найден или недоступен.",
+      network: "Сервис распознавания речи недоступен.",
+    };
+    showNotification(messages[errorCode] || "Не удалось распознать голос.");
+  },
+  onEnd: () => {
+    state.isListening = false;
+    updateMicButton();
+    elements.chatInput.placeholder = "Задайте вопрос ментору";
+  },
+});
+
+const mascot = new MascotController({
+  image: elements.mascotImage,
+  card: elements.avatarCard,
+  status: elements.mentorStatus,
+  message: elements.mentorMessage,
+  wave: elements.voiceWave,
+});
+
 function setMentor(status, message) {
   const statusLabels = {
     idle: "Ожидает документ",
@@ -74,77 +122,35 @@ function setMentor(status, message) {
     success: "Анализ завершен",
     error: "Требуется действие",
   };
-  elements.avatarCard.dataset.status = status;
-  elements.mentorStatus.textContent = statusLabels[status] || statusLabels.idle;
-  elements.mentorMessage.textContent = message;
+  mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message });
   speakMentor(message);
 }
 
 function isSpeechSupported() {
-  return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  return speechService.isAvailable();
 }
 
 function loadVoices() {
-  if (!isSpeechSupported()) return;
-
-  state.voices = window.speechSynthesis.getVoices();
-  state.selectedVoice =
-    state.voices.find((voice) => voice.lang.toLowerCase().startsWith("ru")) ||
-    state.voices.find((voice) => /russian|рус/i.test(voice.name)) ||
-    state.voices[0] ||
-    null;
+  speechService.loadVoices();
 }
 
 function enableSpeech() {
   state.speechReady = true;
-  loadVoices();
-}
-
-function normalizeSpeechText(text) {
-  return text
-    .replace(/\s+/g, " ")
-    .replace(/AI/gi, "эй ай")
-    .replace(/ИИ/g, "искусственного интеллекта")
-    .replace(/PDF/g, "пи ди эф")
-    .replace(/DOCX/g, "док икс")
-    .trim();
+  speechService.enable();
 }
 
 function speakMentor(message, force = false) {
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
-
-  const text = normalizeSpeechText(message);
-  if (!text || (!force && text === state.lastSpokenMessage)) return;
-
-  state.lastSpokenMessage = text;
-  window.speechSynthesis.cancel();
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "ru-RU";
-  utterance.rate = 1.12;
-  utterance.pitch = 1.08;
-  utterance.volume = 0.95;
-
-  if (state.selectedVoice) {
-    utterance.voice = state.selectedVoice;
-  }
-
-  window.speechSynthesis.speak(utterance);
-
-  if (!state.voices.length) {
-    window.setTimeout(() => {
-      loadVoices();
-      if (!window.speechSynthesis.speaking && state.sound && state.speechReady) {
-        window.speechSynthesis.speak(utterance);
-      }
-    }, 250);
-  }
+  speechService.speak(message, {
+    force,
+    onStart: () => mascot.setMascotState({ state: "speaking", message }),
+    onEnd: () => mascot.setMascotState({ state: state.analysisId ? "success" : "idle", message }),
+  });
 }
 
 function stopSpeech() {
-  if (isSpeechSupported()) {
-    window.speechSynthesis.cancel();
-  }
+  speechService.stop();
+  mascot.setMascotState({ state: state.analysisId ? "success" : "idle" });
 }
 
 function updateSoundButton() {
@@ -154,11 +160,11 @@ function updateSoundButton() {
 }
 
 function getSpeechRecognitionConstructor() {
-  return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  return sttService.getConstructor();
 }
 
 function isVoiceInputSupported() {
-  return Boolean(getSpeechRecognitionConstructor());
+  return sttService.isAvailable();
 }
 
 function updateMicButton() {
@@ -167,79 +173,15 @@ function updateMicButton() {
   elements.micButton.title = state.isListening ? "Остановить голосовой ввод" : "Голосовой ввод";
 }
 
-function ensureRecognition() {
-  if (state.recognition || !isVoiceInputSupported()) return state.recognition;
-
-  const Recognition = getSpeechRecognitionConstructor();
-  const recognition = new Recognition();
-  recognition.lang = "ru-RU";
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.maxAlternatives = 1;
-
-  recognition.addEventListener("start", () => {
-    state.isListening = true;
-    updateMicButton();
-    elements.chatInput.placeholder = "Слушаю вопрос...";
-    showNotification("Говорите, я слушаю.");
-  });
-
-  recognition.addEventListener("result", (event) => {
-    const transcript = Array.from(event.results)
-      .map((result) => result[0]?.transcript || "")
-      .join(" ")
-      .trim();
-
-    if (transcript) {
-      elements.chatInput.value = transcript;
-    }
-
-    const lastResult = event.results[event.results.length - 1];
-    if (lastResult?.isFinal && transcript) {
-      recognition.stop();
-      elements.chatInput.value = "";
-      enableSpeech();
-      askMentor(transcript);
-    }
-  });
-
-  recognition.addEventListener("error", (event) => {
-    const messages = {
-      "not-allowed": "Браузер не получил доступ к микрофону.",
-      "no-speech": "Речь не распознана. Попробуйте еще раз.",
-      "audio-capture": "Микрофон не найден или недоступен.",
-      network: "Сервис распознавания речи недоступен.",
-    };
-    showNotification(messages[event.error] || "Не удалось распознать голос.");
-  });
-
-  recognition.addEventListener("end", () => {
-    state.isListening = false;
-    updateMicButton();
-    elements.chatInput.placeholder = "Задайте вопрос ментору";
-  });
-
-  state.recognition = recognition;
-  return recognition;
-}
-
 function startVoiceInput() {
   if (!isVoiceInputSupported()) {
     showNotification("Голосовой ввод не поддерживается этим браузером. Лучше открыть в Chrome или Edge.");
     return;
   }
 
-  const recognition = ensureRecognition();
-  if (!recognition) return;
-
-  if (state.isListening) {
-    recognition.stop();
-    return;
-  }
-
   stopSpeech();
   try {
-    recognition.start();
+    sttService.start();
   } catch (error) {
     showNotification("Голосовой ввод уже запускается.");
   }
@@ -287,7 +229,7 @@ function getFileExtension(fileName) {
   return extension.toUpperCase();
 }
 
-function setFile(file) {
+async function setFile(file) {
   if (!file) return;
 
   const extension = getFileExtension(file.name);
@@ -300,12 +242,29 @@ function setFile(file) {
   elements.fileName.textContent = file.name;
   elements.fileMeta.textContent = `${extension} · ${formatFileSize(file.size)}`;
   elements.filePreview.hidden = false;
-  elements.startAnalysisButton.disabled = false;
-  setMentor("idle", "Файл выбран. Можно запускать комплексный анализ.");
+  elements.startAnalysisButton.disabled = true;
+  setMentor("uploading", "Загружаю документ на сервер.");
+
+  try {
+    const documentMetadata = await uploadDocument(file);
+    state.document = documentMetadata;
+    elements.fileName.textContent = documentMetadata.name;
+    elements.fileMeta.textContent = `${extension} · ${formatFileSize(documentMetadata.size)}`;
+    elements.startAnalysisButton.disabled = false;
+    setMentor("success", "Файл загружен. Можно запускать комплексный анализ.");
+  } catch (error) {
+    state.document = null;
+    elements.startAnalysisButton.disabled = true;
+    setMentor("error", error.message || "Не удалось загрузить документ.");
+    showNotification(error.message || "Не удалось загрузить документ.");
+  }
 }
 
 function resetScenario() {
   state.file = null;
+  state.document = null;
+  state.analysisId = null;
+  state.remarks = documentRemarks;
   elements.fileInput.value = "";
   elements.filePreview.hidden = true;
   elements.startAnalysisButton.disabled = true;
@@ -335,11 +294,14 @@ function renderAnalysisSteps(activeIndex = -1) {
 }
 
 function renderResults(result) {
-  elements.criteriaList.innerHTML = result.criteria
+  const normalized = normalizeResult(result);
+  state.remarks = normalized.remarks.length ? normalized.remarks : documentRemarks;
+
+  elements.criteriaList.innerHTML = normalized.criteria
     .map(
-      ([label, score]) => `
+      ({ title, score }) => `
         <div class="criterion">
-          <span>${label}</span>
+          <span>${title}</span>
           <div class="progress"><span style="width: ${score}%"></span></div>
           <strong>${score}%</strong>
         </div>
@@ -347,9 +309,30 @@ function renderResults(result) {
     )
     .join("");
 
-  renderList(elements.strengthsList, result.strengths);
-  renderList(elements.improvementsList, result.improvements);
-  renderList(elements.aiRiskList, result.aiRiskFactors);
+  document.querySelector(".score-card strong").textContent = `${normalized.overall_score} / 100`;
+  document.querySelector(".score-card > div span").textContent = normalized.verdict;
+  document.querySelector(".score-ring").textContent = normalized.overall_score;
+  renderList(elements.strengthsList, normalized.strengths);
+  renderList(elements.improvementsList, normalized.improvements);
+  renderList(elements.aiRiskList, normalized.aiRisk.factors);
+}
+
+function normalizeResult(result) {
+  return {
+    overall_score: result.overall_score ?? 87,
+    verdict: result.verdict ?? "Работа выполнена на хорошем уровне",
+    criteria: (result.criteria || []).map((criterion) => {
+      if (Array.isArray(criterion)) {
+        return { title: criterion[0], score: criterion[1] };
+      }
+      return criterion;
+    }),
+    strengths: result.strengths || [],
+    improvements: result.improvements || [],
+    remarks: result.remarks || [],
+    aiRisk: result.ai_risk || { factors: result.aiRiskFactors || [] },
+    recommendations: result.recommendations || recommendationPlan,
+  };
 }
 
 function renderList(container, items) {
@@ -367,13 +350,14 @@ function renderDocumentReview() {
 }
 
 function renderRemark() {
-  const remark = documentRemarks[state.activeRemark];
+  const remarks = state.remarks || documentRemarks;
+  const remark = remarks[state.activeRemark] || remarks[0];
   elements.remarkContent.innerHTML = `
     <h3>${remark.title}</h3>
     <p><strong>Замечание:</strong> ${remark.quote}</p>
     <p><strong>Рекомендация:</strong> ${remark.recommendation}</p>
   `;
-  elements.remarkTabs.innerHTML = documentRemarks
+  elements.remarkTabs.innerHTML = remarks
     .map(
       (_, index) =>
         `<button class="remark-tab ${index === state.activeRemark ? "is-active" : ""}" type="button" data-remark="${index}">${index + 1}</button>`,
@@ -381,8 +365,8 @@ function renderRemark() {
     .join("");
 }
 
-function renderRecommendationPlan() {
-  elements.recommendationPlan.innerHTML = recommendationPlan
+function renderRecommendationPlan(items = recommendationPlan) {
+  elements.recommendationPlan.innerHTML = items
     .map(
       (item) => `
         <article class="recommendation-card">
@@ -420,39 +404,60 @@ function renderChat() {
   addMessage("mentor", "Готов обсудить результаты анализа и помочь выбрать первые правки.");
 }
 
-function askMentor(question) {
+async function askMentor(question) {
   addMessage("user", question);
   setMentor("speaking", "Формирую ответ на ваш вопрос.");
   const typing = addMessage("mentor", "Ментор формирует ответ.", "is-typing");
 
-  window.setTimeout(() => {
+  try {
+    const response = await askMentorApi(state.analysisId, question);
+    typing.remove();
+    addMessage("mentor", response.answer);
+    setMentor("success", response.answer);
+  } catch (error) {
     typing.remove();
     const answer = getMentorAnswer(question);
     addMessage("mentor", answer);
-    setMentor("success", answer);
-  }, 850);
+    setMentor("error", error.message || "Не удалось получить ответ от backend.");
+    showNotification(error.message || "Не удалось получить ответ от backend.");
+  }
 }
 
 async function startAnalysis() {
-  if (!state.file) return;
+  if (!state.document?.id) return;
 
   showStage("processing");
   renderAnalysisSteps(0);
   setMentor("thinking", analysisSteps[0].message);
 
-  const result = await mockMentorAnalysis((index) => {
-    renderAnalysisSteps(index);
-    setMentor("thinking", analysisSteps[index].message);
-  });
+  try {
+    const result = await runAnalysis(state.document.id, (status) => {
+      if (status.frontendStepIndex !== undefined) {
+        renderAnalysisSteps(status.frontendStepIndex);
+      } else {
+        const index = Math.min(
+          analysisSteps.length - 1,
+          Math.max(0, Math.floor((status.progress || 0) / (100 / analysisSteps.length))),
+        );
+        renderAnalysisSteps(index);
+        state.analysisId = status.id || state.analysisId;
+      }
+      setMentor("thinking", status.message || "Выполняю анализ документа.");
+    });
 
-  renderAnalysisSteps(analysisSteps.length);
-  renderResults(result);
-  renderDocumentReview();
-  renderRecommendationPlan();
-  renderDirections();
-  renderChat();
-  showStage("results");
-  setMentor("success", "Анализ завершен. Я подготовил оценку, замечания и план улучшения.");
+    state.analysisId = result.analysis_id || state.analysisId;
+    renderAnalysisSteps(analysisSteps.length);
+    renderResults(result);
+    renderDocumentReview();
+    renderRecommendationPlan(normalizeResult(result).recommendations);
+    renderDirections();
+    renderChat();
+    showStage("results");
+    setMentor("success", "Анализ завершен. Я подготовил оценку, замечания и план улучшения.");
+  } catch (error) {
+    setMentor("error", error.message || "Анализ завершился с ошибкой.");
+    showNotification(error.message || "Анализ завершился с ошибкой.");
+  }
 }
 
 function bindEvents() {
