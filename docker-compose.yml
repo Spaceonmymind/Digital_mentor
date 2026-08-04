@@ -1,7 +1,52 @@
 services:
-  digital-mentor:
-    build: .
-    container_name: digital-mentor
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: digital-mentor-frontend
     ports:
       - "8080:80"
+    depends_on:
+      backend:
+        condition: service_started
     restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: digital-mentor-backend
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://digital_mentor:change_me@db:5432/digital_mentor}
+      STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}
+      ALLOWED_FILE_TYPES: ${ALLOWED_FILE_TYPES:-.pdf,.docx}
+      MOCK_ANALYSIS_ENABLED: ${MOCK_ANALYSIS_ENABLED:-true}
+      MOCK_ANALYSIS_STEP_DELAY: ${MOCK_ANALYSIS_STEP_DELAY:-1.5}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: digital-mentor-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-digital_mentor}
+      POSTGRES_USER: ${POSTGRES_USER:-digital_mentor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-digital_mentor} -d ${POSTGRES_DB:-digital_mentor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
