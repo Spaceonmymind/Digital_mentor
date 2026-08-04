@@ -14,6 +14,7 @@ from app.schemas.results import (
     RecommendationResult,
     RemarkResult,
 )
+from app.schemas.methodology import AnalysisEvidence, MethodologyReference
 
 logger = logging.getLogger(__name__)
 
@@ -132,16 +133,37 @@ class MockAnalysisEngine:
             ],
             remarks=[
                 RemarkResult(
+                    id="remark-1",
                     title="Недостаточно раскрыта методология",
                     quote="В разделе «Методы исследования» отсутствует описание критериев оценки.",
+                    comment="Раздел описывает общий подход, но не фиксирует измеримые критерии оценки.",
                     recommendation="Добавьте описание выборки, используемых показателей и способа интерпретации результатов.",
+                    page=1,
+                    section="Методы исследования",
+                    severity="warning",
+                    priority="Высокий",
                     page_number=1,
                     block_index=0,
+                    evidence=[
+                        AnalysisEvidence(
+                            document_id="demo",
+                            page=1,
+                            section="Методы исследования",
+                            quote="В разделе «Методы исследования» отсутствует описание критериев оценки.",
+                            block_index=0,
+                        )
+                    ],
                 ),
                 RemarkResult(
+                    id="remark-2",
                     title="Нужны авторские выводы",
                     quote="Фрагмент хорошо описывает источники, но слабо показывает позицию автора.",
+                    comment="После сравнения решений полезно явно показать самостоятельную позицию автора.",
                     recommendation="Сформулируйте собственный вывод после сравнения решений и объясните, почему он важен для темы.",
+                    page=1,
+                    section="Выводы",
+                    severity="notice",
+                    priority="Средний",
                     page_number=1,
                     block_index=1,
                 ),
@@ -169,6 +191,9 @@ class MockAnalysisEngine:
                     "methodology_version": methodology_version,
                 }
             ],
+            methodology=MethodologyReference(methodology_id=methodology_id, methodology_version=methodology_version),
+            evidence=[],
+            extra_blocks={},
         )
 
 

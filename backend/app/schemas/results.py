@@ -2,6 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.schemas.methodology import AgentTraceItem, AnalysisEvidence, MethodologyReference
+
 
 class CriterionResult(BaseModel):
     code: str
@@ -12,11 +14,18 @@ class CriterionResult(BaseModel):
 
 
 class RemarkResult(BaseModel):
+    id: str | None = None
     title: str
     quote: str
     recommendation: str
+    page: int | None = None
+    section: str | None = None
+    severity: str | None = None
+    comment: str | None = None
+    priority: str | None = None
     page_number: int | None = None
     block_index: int | None = None
+    evidence: list[AnalysisEvidence] = []
 
 
 class AiRiskResult(BaseModel):
@@ -43,4 +52,7 @@ class AnalysisResultPayload(BaseModel):
     remarks: list[RemarkResult]
     ai_risk: AiRiskResult
     recommendations: list[RecommendationResult]
-    trace: list[dict[str, Any]] = []
+    trace: list[dict[str, Any] | AgentTraceItem] = []
+    methodology: MethodologyReference | None = None
+    evidence: list[AnalysisEvidence] = []
+    extra_blocks: dict[str, Any] = {}
