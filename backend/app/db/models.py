@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -79,4 +80,37 @@ class ChatMessage(Base):
     analysis_id: Mapped[str] = mapped_column(String(36), ForeignKey("analyses.id"), nullable=False)
     role: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LLMCall(Base):
+    __tablename__ = "llm_calls"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    model: Mapped[str] = mapped_column(String(255), nullable=False)
+    provider_response_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    requested_model: Mapped[str] = mapped_column(String(255), nullable=False)
+    actual_model: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    aggregator: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    finish_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    temperature: Mapped[Decimal | None] = mapped_column(Numeric(4, 2), nullable=True)
+    max_completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    seed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    analysis_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("analyses.id"), nullable=True)
+    assessment_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("assessments.id"), nullable=True)
+    task_run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("assessment_task_runs.id", use_alter=True), nullable=True
+    )
+    criterion_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("methodology_criteria.id"), nullable=True)
+    indicator_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("methodology_indicators.id"), nullable=True)
+    prompt_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prompt_templates.id"), nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cached_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reasoning_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_rub: Mapped[Decimal | None] = mapped_column(Numeric(12, 6), nullable=True)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

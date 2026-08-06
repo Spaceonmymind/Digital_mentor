@@ -32,6 +32,6 @@ async def ready() -> dict[str, str]:
     return {
         "status": "ready",
         "app_env": settings.app_env,
-        "analysis_engine": "mock" if settings.mock_analysis_enabled else "disabled",
+        "analysis_engine": settings.analysis_engine,
         "tts_mode": settings.tts_mode,
     }

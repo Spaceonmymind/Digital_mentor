@@ -79,6 +79,40 @@ make restore
 
 Реальный `.env` не коммитится.
 
+## Assessment Worker Execution
+
+Первый исполняемый AI-контур включается отдельно:
+
+```env
+ANALYSIS_ENGINE=assessment_worker
+POLZA_API_KEY=...
+```
+
+Текущий execution flow:
+
+```text
+Document + UNIVERSAL_DOCUMENT methodology
+-> AssessmentPlan
+-> sequential worker task runs
+-> Mistral Medium 3.5 via Polza.ai
+-> IndicatorResult + llm_calls trace
+```
+
+LLM не управляет процессом: порядок задач приходит из `AssessmentPlan`, построенного по данным БД (`Methodology`, `MethodologyCriterion`, `MethodologyIndicator`, `PromptTemplate`). Модель получает только одну задачу worker для одного индикатора и возвращает JSON по строгой Pydantic-схеме. Critic, Final Expert, RAG, web search и tool calling не подключены.
+
+Контекст строится из локально извлеченного `storage/extracted/{document_id}/content.json`; PDF/DOCX в LLM не отправляются. По умолчанию используется `AI_DOCUMENT_EXCERPT_STRATEGY=head_tail`: 70% начала и 30% конца, максимум `AI_DOCUMENT_MAX_CHARS=60000`. Документ помещается в `<untrusted_document>...</untrusted_document>`.
+
+`assessment_task_runs` хранит статус каждой worker-задачи (`pending`, `running`, `completed`, `failed`), попытку, ошибку, `llm_call_id` и idempotency hash. Если успешный результат с тем же hash уже есть, LLM повторно не вызывается.
+
+Ручной smoke-тест:
+
+```bash
+docker compose up -d --build
+ANALYSIS_ENGINE=assessment_worker POLZA_API_KEY=... python scripts/test_assessment_worker.py
+```
+
+Demo-методологии `UNIVERSAL_DOCUMENT` и `STARTUP_VKR` не являются утвержденными методиками. Точка будущего расширения: добавить реальные критерии/индикаторы/промпты в БД, затем подключить Critic и Final Expert отдельным Executor поверх уже сохраненных task results.
+
 ## API
 
 - `GET /health`, `GET /health/live`, `GET /health/ready`
@@ -97,6 +131,10 @@ make restore
 - `POST /api/v1/chat/messages`
 - `POST /api/v1/tts`
 - `GET /api/v1/media/audio/{audio_id}`
+- `POST /api/v1/internal/pipeline/build`
+- `POST /api/v1/internal/assessments/{assessment_id}/execute`
+- `GET /api/v1/internal/assessments/{assessment_id}/execution`
+- `GET /api/v1/internal/assessments/{assessment_id}/indicator-results`
 
 Ошибки возвращаются в формате:
 

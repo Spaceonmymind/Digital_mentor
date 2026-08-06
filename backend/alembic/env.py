@@ -6,7 +6,10 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.db.base import Base
+from app.assessment import models as assessment_models  # noqa: F401
 from app.db import models  # noqa: F401
+from app.execution import models as execution_models  # noqa: F401
+from app.methodology import models as methodology_models  # noqa: F401
 
 
 config = context.config

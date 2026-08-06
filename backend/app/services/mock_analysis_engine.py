@@ -198,4 +198,8 @@ class MockAnalysisEngine:
 
 
 def get_analysis_engine() -> MockAnalysisEngine:
+    if settings.analysis_engine == "assessment_worker":
+        from app.services.assessment_worker_analysis_engine import AssessmentWorkerAnalysisEngine
+
+        return AssessmentWorkerAnalysisEngine()
     return MockAnalysisEngine()

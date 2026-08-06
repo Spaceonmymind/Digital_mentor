@@ -34,6 +34,16 @@ class Settings:
     audio_retention_minutes: int = int(os.getenv("AUDIO_RETENTION_MINUTES", "60"))
     report_retention_hours: int = int(os.getenv("REPORT_RETENTION_HOURS", "24"))
     mock_analysis_step_delay: float = float(os.getenv("MOCK_ANALYSIS_STEP_DELAY", "1.5"))
+    polza_api_key: str | None = os.getenv("POLZA_API_KEY")
+    polza_base_url: str = os.getenv("POLZA_BASE_URL", "https://polza.ai/api/v1")
+    llm_request_timeout_seconds: float = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
+    analysis_engine: str = os.getenv("ANALYSIS_ENGINE", "mock")
+    ai_document_max_chars: int = int(os.getenv("AI_DOCUMENT_MAX_CHARS", "60000"))
+    ai_document_excerpt_strategy: str = os.getenv("AI_DOCUMENT_EXCERPT_STRATEGY", "head_tail")
+    ai_worker_temperature: float = float(os.getenv("AI_WORKER_TEMPERATURE", "0"))
+    ai_worker_max_completion_tokens: int = int(os.getenv("AI_WORKER_MAX_COMPLETION_TOKENS", "2000"))
+    ai_worker_seed: int | None = int(os.getenv("AI_WORKER_SEED", "42")) if os.getenv("AI_WORKER_SEED", "42") else None
+    ai_execution_stop_on_error: bool = _bool_env("AI_EXECUTION_STOP_ON_ERROR", True)
     cors_origins: tuple[str, ...] = tuple(
         item.strip()
         for item in os.getenv("CORS_ORIGINS", "*").split(",")

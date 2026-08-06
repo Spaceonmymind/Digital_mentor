@@ -1,16 +1,24 @@
 import asyncio
 import io
+from decimal import Decimal
 
 import fitz
 import pytest
-import fitz
 from docx import Document as DocxDocument
 from sqlalchemy import select
 
-from app.db.models import Analysis
 from app.api.v1 import documents as documents_api
-from app.db.models import AnalysisEvent
+from app.api.v1 import internal_llm as internal_llm_api
+from app.assessment.models import Assessment
+from app.db.models import Analysis
+from app.db.models import AnalysisEvent, LLMCall
 from app.db.session import async_session_factory
+from app.llm.errors import LLMConfigurationError
+from app.llm.registry import AGGREGATOR, WORKER
+from app.llm.schemas import LLMResult, LLMTestStructuredResponse, LLMUsage
+from app.main import app
+from app.methodology.models import Methodology, MethodologyCriterion, MethodologyIndicator, PromptTemplate
+from app.pipeline.artifact_resolver import ArtifactResolver
 
 
 def make_pdf_bytes(text: str = "Методы исследования\nДля анализа был использован сравнительный подход.") -> bytes:
@@ -66,6 +74,368 @@ async def test_healthcheck(client):
     assert ready.status_code == 200
     assert ready.json()["status"] == "ready"
     assert ready.json()["analysis_engine"] == "mock"
+
+
+@pytest.mark.asyncio
+async def test_internal_llm_test_endpoint_records_trace(client):
+    class FakeLLMClient:
+        async def ask(self, model: str, system_prompt: str, user_prompt: str, response_model):
+            assert model == WORKER
+            assert system_prompt == "Системная инструкция"
+            assert "Описание идеи" in user_prompt
+            output = response_model(summary="Краткое описание", keywords=["идея", "рынок"])
+            assert isinstance(output, LLMTestStructuredResponse)
+            return LLMResult(
+                output=output,
+                provider_response_id="cmpl-test",
+                requested_model=model,
+                actual_model="mistral-medium-3.5",
+                aggregator=AGGREGATOR,
+                provider="mistral",
+                finish_reason="stop",
+                temperature=0,
+                usage=LLMUsage(
+                    prompt_tokens=40,
+                    completion_tokens=12,
+                    total_tokens=52,
+                    cached_tokens=8,
+                    reasoning_tokens=0,
+                    cost_rub=Decimal("0.010000"),
+                ),
+                latency_ms=123,
+                status="success",
+            )
+
+    app.dependency_overrides[internal_llm_api.get_llm_client] = lambda: lambda: FakeLLMClient()
+    try:
+        response = await client.post(
+            "/api/v1/internal/llm/test",
+            json={"text": "Сервис для проверки гипотез", "system_prompt": "Системная инструкция"},
+        )
+    finally:
+        app.dependency_overrides.pop(internal_llm_api.get_llm_client, None)
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "summary": "Краткое описание",
+        "keywords": ["идея", "рынок"],
+        "tokens": 52,
+        "cost_rub": "0.010000",
+        "provider": "mistral",
+        "requested_model": WORKER,
+        "actual_model": "mistral-medium-3.5",
+        "provider_response_id": "cmpl-test",
+        "latency_ms": 123,
+    }
+
+    async with async_session_factory() as session:
+        traces = (await session.execute(select(LLMCall))).scalars().all()
+    assert len(traces) == 1
+    assert traces[0].model == WORKER
+    assert traces[0].provider_response_id == "cmpl-test"
+    assert traces[0].requested_model == WORKER
+    assert traces[0].actual_model == "mistral-medium-3.5"
+    assert traces[0].aggregator == AGGREGATOR
+    assert traces[0].provider == "mistral"
+    assert traces[0].finish_reason == "stop"
+    assert traces[0].temperature == Decimal("0.00")
+    assert traces[0].total_tokens == 52
+    assert traces[0].cached_tokens == 8
+    assert traces[0].reasoning_tokens == 0
+    assert traces[0].cost_rub == Decimal("0.010000")
+    assert traces[0].latency_ms == 123
+    assert traces[0].status == "success"
+
+
+@pytest.mark.asyncio
+async def test_internal_llm_test_endpoint_records_failed_trace(client):
+    class FailingLLMClient:
+        async def ask(self, **_):
+            raise RuntimeError("transport failure")
+
+    app.dependency_overrides[internal_llm_api.get_llm_client] = lambda: lambda: FailingLLMClient()
+    try:
+        response = await client.post(
+            "/api/v1/internal/llm/test",
+            json={"text": "Сервис для проверки гипотез", "system_prompt": "Системная инструкция"},
+        )
+    finally:
+        app.dependency_overrides.pop(internal_llm_api.get_llm_client, None)
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "LLM_TEST_FAILED"
+
+    async with async_session_factory() as session:
+        traces = (await session.execute(select(LLMCall))).scalars().all()
+    assert len(traces) == 1
+    assert traces[0].requested_model == WORKER
+    assert traces[0].aggregator == AGGREGATOR
+    assert traces[0].status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_internal_llm_test_endpoint_records_failed_trace_when_client_init_fails(client):
+    def fail_to_create_client():
+        raise LLMConfigurationError("POLZA_API_KEY is not configured")
+
+    app.dependency_overrides[internal_llm_api.get_llm_client] = lambda: fail_to_create_client
+    try:
+        response = await client.post(
+            "/api/v1/internal/llm/test",
+            json={"text": "Сервис для проверки гипотез", "system_prompt": "Системная инструкция"},
+        )
+    finally:
+        app.dependency_overrides.pop(internal_llm_api.get_llm_client, None)
+
+    assert response.status_code == 500
+    assert response.json()["error"]["code"] == "LLM_CONFIGURATION_ERROR"
+
+    async with async_session_factory() as session:
+        traces = (await session.execute(select(LLMCall))).scalars().all()
+    assert len(traces) == 1
+    assert traces[0].requested_model == WORKER
+    assert traces[0].aggregator == AGGREGATOR
+    assert traces[0].status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_internal_assessment_endpoint_creates_assessment(client):
+    async with async_session_factory() as session:
+        methodology = Methodology(
+            code="ASSESSMENT_TEST",
+            name="Assessment test methodology",
+            version="1.0",
+            description=None,
+            is_active=True,
+            is_demo=True,
+        )
+        session.add(methodology)
+        await session.commit()
+        await session.refresh(methodology)
+
+    response = await client.post(
+        "/api/v1/internal/assessment",
+        json={
+            "artifact_type": "document",
+            "artifact_id": "document-123",
+            "methodology_id": methodology.id,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["id"]
+    assert payload["artifact_id"] == "document-123"
+    assert payload["artifact_type"] == "document"
+    assert payload["methodology_id"] == methodology.id
+    assert payload["status"] == "created"
+    assert payload["created_at"]
+
+    async with async_session_factory() as session:
+        assessment = await session.get(Assessment, payload["id"])
+    assert assessment is not None
+    assert assessment.artifact_id == "document-123"
+    assert assessment.methodology_id == methodology.id
+    assert assessment.status == "created"
+
+
+@pytest.mark.asyncio
+async def test_internal_methodology_endpoint_returns_full_methodology(client):
+    async with async_session_factory() as session:
+        methodology = Methodology(
+            code="MIRCLASS",
+            name="Demo MIRCLASS methodology",
+            version="1.0",
+            description="Demo seed for endpoint test.",
+            is_active=True,
+            is_demo=True,
+        )
+        session.add(methodology)
+        await session.flush()
+        criterion = MethodologyCriterion(
+            methodology_id=methodology.id,
+            number="1",
+            title="Demo criterion: business model",
+            description="Demo criterion for endpoint test.",
+            order_index=1,
+            weight=Decimal("0.25"),
+            is_demo=True,
+        )
+        session.add(criterion)
+        await session.flush()
+        session.add(
+            MethodologyIndicator(
+                criterion_id=criterion.id,
+                title="Demo indicator: value proposition",
+                description="Demo indicator for endpoint test.",
+                expected_result="Demo expected result.",
+                order_index=1,
+                weight=Decimal("1.00"),
+                is_demo=True,
+            )
+        )
+        await session.commit()
+
+    response = await client.get("/api/v1/internal/methodologies/MIRCLASS")
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["code"] == "MIRCLASS"
+    assert payload["version"] == "1.0"
+    assert payload["is_demo"] is True
+    assert len(payload["criteria"]) == 1
+    assert payload["criteria"][0]["number"] == "1"
+    assert payload["criteria"][0]["title"] == "Demo criterion: business model"
+    assert payload["criteria"][0]["weight"] == "0.2500"
+    assert payload["criteria"][0]["indicators"][0]["title"] == "Demo indicator: value proposition"
+    assert payload["criteria"][0]["indicators"][0]["weight"] == "1.0000"
+    assert payload["criteria"][0]["indicators"][0]["expected_result"] == "Demo expected result."
+    assert payload["prompts"] == []
+
+
+@pytest.mark.asyncio
+async def test_internal_methodology_endpoint_returns_404_for_missing_methodology(client):
+    response = await client.get("/api/v1/internal/methodologies/MISSING")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "METHODOLOGY_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_internal_methodologies_endpoint_creates_and_lists_methodologies(client):
+    create_response = await client.post(
+        "/api/v1/internal/methodologies",
+        json={
+            "code": "IDEA_CARD",
+            "name": "Карточка идеи",
+            "description": "Тестовая методология без критериев.",
+            "version": "1.0",
+            "is_active": True,
+        },
+    )
+    assert create_response.status_code == 200, create_response.text
+    created = create_response.json()
+    assert created["code"] == "IDEA_CARD"
+    assert created["version"] == "1.0"
+    assert created["is_active"] is True
+
+    list_response = await client.get("/api/v1/internal/methodologies")
+    assert list_response.status_code == 200, list_response.text
+    assert [item["code"] for item in list_response.json()] == ["IDEA_CARD"]
+
+
+@pytest.mark.asyncio
+async def test_artifact_resolver_uses_simple_filename_rules():
+    resolver = ArtifactResolver()
+
+    assert await resolver.resolve(None, "startup-vkr.pdf", {}) == "STARTUP_VKR"
+    assert await resolver.resolve(None, "работа-стартап.docx", {}) == "STARTUP_VKR"
+    assert await resolver.resolve(None, "ordinary-document.pdf", {}) == "UNIVERSAL_DOCUMENT"
+    assert await resolver.resolve("startup_vkr", "ordinary-document.pdf", {}) == "STARTUP_VKR"
+
+
+@pytest.mark.asyncio
+async def test_internal_pipeline_build_creates_assessment_and_tasks(client):
+    async with async_session_factory() as session:
+        methodology = Methodology(
+            code="STARTUP_VKR",
+            name="ВКР как стартап",
+            version="1.0",
+            description="Pipeline test methodology.",
+            is_active=True,
+            is_demo=True,
+        )
+        session.add(methodology)
+        await session.flush()
+        criterion_1 = MethodologyCriterion(
+            methodology_id=methodology.id,
+            number="1",
+            title="Demo criterion 1",
+            description="Demo criterion for pipeline test.",
+            weight=Decimal("0.50"),
+            order_index=1,
+            is_demo=True,
+        )
+        criterion_2 = MethodologyCriterion(
+            methodology_id=methodology.id,
+            number="2",
+            title="Demo criterion 2",
+            description="Demo criterion for pipeline test.",
+            weight=Decimal("0.50"),
+            order_index=2,
+            is_demo=True,
+        )
+        session.add_all([criterion_1, criterion_2])
+        await session.flush()
+        session.add_all(
+            [
+                MethodologyIndicator(
+                    criterion_id=criterion_1.id,
+                    title="Demo indicator 1",
+                    description="Demo indicator for pipeline test.",
+                    expected_result="Demo expected result.",
+                    weight=Decimal("0.60"),
+                    order_index=1,
+                    is_demo=True,
+                ),
+                MethodologyIndicator(
+                    criterion_id=criterion_1.id,
+                    title="Demo indicator 2",
+                    description="Demo indicator for pipeline test.",
+                    expected_result="Demo expected result.",
+                    weight=Decimal("0.40"),
+                    order_index=2,
+                    is_demo=True,
+                ),
+                MethodologyIndicator(
+                    criterion_id=criterion_2.id,
+                    title="Demo indicator 3",
+                    description="Demo indicator for pipeline test.",
+                    expected_result="Demo expected result.",
+                    weight=Decimal("1.00"),
+                    order_index=1,
+                    is_demo=True,
+                ),
+                PromptTemplate(
+                    methodology_id=methodology.id,
+                    stage="worker",
+                    system_prompt="Demo prompt template.",
+                    user_template="Demo user template.",
+                    version="1.0",
+                    is_demo=True,
+                ),
+            ]
+        )
+        await session.commit()
+
+    response = await client.post(
+        "/api/v1/internal/pipeline/build",
+        json={"artifact_type": "STARTUP_VKR", "artifact_id": "document-123"},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["assessment_id"]
+    assert payload["methodology"] == "STARTUP_VKR"
+    assert payload["tasks_count"] == 3
+    assert [task["criterion"] for task in payload["tasks"]] == [
+        "Demo criterion 1",
+        "Demo criterion 1",
+        "Demo criterion 2",
+    ]
+    assert [task["indicator"] for task in payload["tasks"]] == [
+        "Demo indicator 1",
+        "Demo indicator 2",
+        "Demo indicator 3",
+    ]
+    assert all(task["prompt_template_id"] for task in payload["tasks"])
+
+    async with async_session_factory() as session:
+        assessment = await session.get(Assessment, payload["assessment_id"])
+    assert assessment is not None
+    assert assessment.artifact_type == "STARTUP_VKR"
+    assert assessment.artifact_id == "document-123"
+    assert assessment.methodology_id == methodology.id
 
 
 @pytest.mark.asyncio

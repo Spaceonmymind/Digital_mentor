@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-os.environ.setdefault("APP_ENV", "test")
-os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-os.environ.setdefault("STORAGE_PATH", tempfile.mkdtemp(prefix="digital-mentor-test-storage-"))
-os.environ.setdefault("MOCK_ANALYSIS_STEP_DELAY", "0.01")
-os.environ.setdefault("LOG_LEVEL", "WARNING")
+os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+os.environ["STORAGE_PATH"] = tempfile.mkdtemp(prefix="digital-mentor-test-storage-")
+os.environ["MOCK_ANALYSIS_STEP_DELAY"] = "0.01"
+os.environ["LOG_LEVEL"] = "WARNING"
 
 from app.db.base import Base  # noqa: E402
 from app.db.session import engine  # noqa: E402
