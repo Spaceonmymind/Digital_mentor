@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.methodology.models import Methodology, MethodologyCriterion, MethodologyIndicator, PromptTemplate
+from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate
 
 
 class MethodologyRepository:
@@ -57,6 +57,7 @@ class MethodologyRepository:
             .options(
                 selectinload(Methodology.criteria).selectinload(MethodologyCriterion.indicators),
                 selectinload(Methodology.prompts),
+                selectinload(Methodology.agents),
             )
             .limit(1)
         )
@@ -68,7 +69,7 @@ class MethodologyRepository:
         number: str,
         title: str,
         description: str | None,
-        weight: float,
+        weight: float | None,
         order_index: int,
         is_demo: bool = False,
     ) -> MethodologyCriterion:
@@ -92,7 +93,7 @@ class MethodologyRepository:
         title: str,
         description: str | None,
         expected_result: str | None,
-        weight: float,
+        weight: float | None,
         order_index: int,
         is_demo: bool = False,
     ) -> MethodologyIndicator:
@@ -109,6 +110,44 @@ class MethodologyRepository:
         await self.session.commit()
         await self.session.refresh(indicator)
         return indicator
+
+    async def create_agent(
+        self,
+        methodology_id: str,
+        code: str,
+        name: str,
+        version: str,
+        stage_code: str,
+        execution_order: int,
+        execution_mode: str,
+        model_role: str,
+        prompt_template_id: str | None = None,
+        input_schema_code: str | None = None,
+        output_schema_code: str | None = None,
+        is_active: bool = True,
+        is_required: bool = True,
+        is_demo: bool = False,
+    ) -> MethodologyAgent:
+        agent = MethodologyAgent(
+            methodology_id=methodology_id,
+            code=code,
+            name=name,
+            version=version,
+            stage_code=stage_code,
+            execution_order=execution_order,
+            execution_mode=execution_mode,
+            model_role=model_role,
+            prompt_template_id=prompt_template_id,
+            input_schema_code=input_schema_code,
+            output_schema_code=output_schema_code,
+            is_active=is_active,
+            is_required=is_required,
+            is_demo=is_demo,
+        )
+        self.session.add(agent)
+        await self.session.commit()
+        await self.session.refresh(agent)
+        return agent
 
     async def create_prompt(
         self,

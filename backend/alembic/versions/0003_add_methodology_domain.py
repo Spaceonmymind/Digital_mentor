@@ -29,6 +29,7 @@ def upgrade() -> None:
         sa.Column("version", sa.String(length=128), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("is_demo", sa.Boolean(), nullable=False),
+        sa.Column("source", sa.String(length=128), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
     op.create_index("ix_methodologies_code", "methodologies", ["code"])
@@ -41,9 +42,11 @@ def upgrade() -> None:
         sa.Column("number", sa.String(length=64), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("weight", sa.Numeric(8, 4), nullable=False),
+        sa.Column("weight", sa.Numeric(8, 4), nullable=True),
         sa.Column("order_index", sa.Integer(), nullable=False),
         sa.Column("is_demo", sa.Boolean(), nullable=False),
+        sa.Column("source", sa.String(length=128), nullable=True),
+        sa.Column("version", sa.String(length=128), nullable=True),
         sa.UniqueConstraint("methodology_id", "number", name="uq_methodology_criteria_number"),
     )
     op.create_index("ix_methodology_criteria_methodology", "methodology_criteria", ["methodology_id"])
@@ -55,9 +58,12 @@ def upgrade() -> None:
         sa.Column("title", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("expected_result", sa.Text(), nullable=True),
-        sa.Column("weight", sa.Numeric(8, 4), nullable=False),
+        sa.Column("weight", sa.Numeric(8, 4), nullable=True),
         sa.Column("order_index", sa.Integer(), nullable=False),
+        sa.Column("required", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("is_demo", sa.Boolean(), nullable=False),
+        sa.Column("source", sa.String(length=128), nullable=True),
+        sa.Column("version", sa.String(length=128), nullable=True),
         sa.UniqueConstraint("criterion_id", "order_index", name="uq_methodology_indicators_order"),
     )
     op.create_index("ix_methodology_indicators_criterion", "methodology_indicators", ["criterion_id"])
@@ -71,6 +77,7 @@ def upgrade() -> None:
         sa.Column("user_template", sa.Text(), nullable=False),
         sa.Column("version", sa.String(length=128), nullable=False),
         sa.Column("is_demo", sa.Boolean(), nullable=False),
+        sa.Column("source", sa.String(length=128), nullable=True),
         sa.UniqueConstraint("methodology_id", "stage", "version", name="uq_prompt_templates_stage_version"),
     )
     op.create_index("ix_prompt_templates_methodology", "prompt_templates", ["methodology_id"])

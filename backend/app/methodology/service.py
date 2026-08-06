@@ -4,6 +4,7 @@ from app.methodology.repository import MethodologyRepository
 from app.methodology.schemas import (
     MethodologyCriterionResponse,
     MethodologyFullResponse,
+    MethodologyAgentResponse,
     MethodologyIndicatorResponse,
     MethodologyResponse,
 )
@@ -43,7 +44,10 @@ class MethodologyService:
                     expected_result=indicator.expected_result,
                     weight=indicator.weight,
                     order_index=indicator.order_index,
+                    required=indicator.required,
                     is_demo=indicator.is_demo,
+                    source=indicator.source,
+                    version=indicator.version,
                 )
                 for indicator in sorted(criterion.indicators, key=lambda item: (item.order_index, item.id))
             ]
@@ -56,6 +60,8 @@ class MethodologyService:
                     weight=criterion.weight,
                     order_index=criterion.order_index,
                     is_demo=criterion.is_demo,
+                    source=criterion.source,
+                    version=criterion.version,
                     indicators=indicators,
                 )
             )
@@ -67,7 +73,12 @@ class MethodologyService:
             version=methodology.version,
             is_active=methodology.is_active,
             is_demo=methodology.is_demo,
+            source=methodology.source,
             created_at=methodology.created_at,
             criteria=criteria,
             prompts=[prompt for prompt in sorted(methodology.prompts, key=lambda item: (item.stage, item.version, item.id))],
+            agents=[
+                MethodologyAgentResponse.model_validate(agent)
+                for agent in sorted(methodology.agents, key=lambda item: (item.stage_code, item.execution_order, item.code))
+            ],
         )

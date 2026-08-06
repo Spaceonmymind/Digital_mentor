@@ -30,8 +30,14 @@ class PlanBuilder:
 
         prompt_template = self._worker_prompt_template(assessment.methodology)
         tasks: list[AssessmentTask] = []
-        for criterion in sorted(assessment.methodology.criteria, key=lambda item: (item.order_index, item.number, item.id)):
-            for indicator in sorted(criterion.indicators, key=lambda item: (item.order_index, item.id)):
+        criteria = assessment.methodology.criteria
+        if assessment.methodology.code == "STARTUP_VKR" and not assessment.methodology.is_demo:
+            criteria = [criterion for criterion in criteria if not criterion.is_demo]
+        for criterion in sorted(criteria, key=lambda item: (item.order_index, item.number, item.id)):
+            indicators = criterion.indicators
+            if assessment.methodology.code == "STARTUP_VKR" and not assessment.methodology.is_demo:
+                indicators = [indicator for indicator in indicators if not indicator.is_demo]
+            for indicator in sorted(indicators, key=lambda item: (item.order_index, item.id)):
                 tasks.append(
                     AssessmentTask(
                         criterion_id=criterion.id,
