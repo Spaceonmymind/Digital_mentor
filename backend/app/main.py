@@ -9,11 +9,13 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import update
 
 from app.api.v1.analyses import router as analyses_router
+from app.api.v1.assessments import router as assessments_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.config import router as config_router
 from app.api.v1.documents import router as documents_router
 from app.api.v1.health import router as health_router
 from app.api.v1.internal_execution import router as internal_execution_router
+from app.api.v1.internal_gates import router as internal_gates_router
 from app.api.v1.internal_assessment import router as internal_assessment_router
 from app.api.v1.internal_llm import router as internal_llm_router
 from app.api.v1.internal_methodology import router as internal_methodology_router
@@ -104,11 +106,13 @@ app.include_router(health_router)
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(documents_router)
 app.include_router(analyses_router)
+app.include_router(assessments_router)
 app.include_router(chat_router)
 app.include_router(tts_router)
 app.include_router(media_router)
 app.include_router(config_router)
 app.include_router(internal_execution_router)
+app.include_router(internal_gates_router)
 app.include_router(internal_llm_router)
 app.include_router(internal_assessment_router)
 app.include_router(internal_methodology_router)

@@ -44,6 +44,15 @@ class Settings:
     ai_worker_max_completion_tokens: int = int(os.getenv("AI_WORKER_MAX_COMPLETION_TOKENS", "2000"))
     ai_worker_seed: int | None = int(os.getenv("AI_WORKER_SEED", "42")) if os.getenv("AI_WORKER_SEED", "42") else None
     ai_execution_stop_on_error: bool = _bool_env("AI_EXECUTION_STOP_ON_ERROR", True)
+    ai_demo_auto_approve_gates: bool = _bool_env("AI_DEMO_AUTO_APPROVE_GATES", True)
+    ai_assessment_max_cost_rub: float = float(os.getenv("AI_ASSESSMENT_MAX_COST_RUB", "100"))
+    ai_max_worker_calls: int = int(os.getenv("AI_MAX_WORKER_CALLS", "100"))
+    ai_max_critic_calls: int = int(os.getenv("AI_MAX_CRITIC_CALLS", "30"))
+    ai_max_final_expert_calls: int = int(os.getenv("AI_MAX_FINAL_EXPERT_CALLS", "1"))
+    ai_critic_temperature: float = float(os.getenv("AI_CRITIC_TEMPERATURE", "0"))
+    ai_critic_max_completion_tokens: int = int(os.getenv("AI_CRITIC_MAX_COMPLETION_TOKENS", "4000"))
+    ai_final_expert_temperature: float = float(os.getenv("AI_FINAL_EXPERT_TEMPERATURE", "0"))
+    ai_final_expert_max_completion_tokens: int = int(os.getenv("AI_FINAL_EXPERT_MAX_COMPLETION_TOKENS", "3000"))
     cors_origins: tuple[str, ...] = tuple(
         item.strip()
         for item in os.getenv("CORS_ORIGINS", "*").split(",")

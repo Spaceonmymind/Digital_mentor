@@ -113,6 +113,43 @@ ANALYSIS_ENGINE=assessment_worker POLZA_API_KEY=... python scripts/test_assessme
 
 Demo-методологии `UNIVERSAL_DOCUMENT` и `STARTUP_VKR` не являются утвержденными методиками. Точка будущего расширения: добавить реальные критерии/индикаторы/промпты в БД, затем подключить Critic и Final Expert отдельным Executor поверх уже сохраненных task results.
 
+## STARTUP_VKR Agent Flow
+
+Полный первый AI-сценарий включается режимом:
+
+```env
+ANALYSIS_ENGINE=startup_vkr_agents
+AI_DEMO_AUTO_APPROVE_GATES=true
+```
+
+Поток:
+
+```text
+загрузка ВКР
+-> локальное извлечение текста
+-> методология STARTUP_VKR
+-> Mistral worker
+-> Claude critic
+-> один GPT final synthesis
+-> MentorAnalysisResult
+-> существующий frontend result
+-> PDF
+-> чат по сохраненному результату
+```
+
+Методология импортируется из `docs/methodology/anti_during/`; реальные строки имеют `source=anti_during_methodology`, `is_demo=false`. Demo-критерии физически не удаляются, но не используются в real `STARTUP_VKR` плане.
+
+LLM не управляет стадиями, не проходит гейты, не меняет Assessment и не исполняет инструкции из документа. Gate decisions сохраняются отдельно; demo auto-approve пишет `decision_source=demo_auto_approve`.
+
+Ручной E2E:
+
+```bash
+ANALYSIS_ENGINE=startup_vkr_agents docker compose up -d --build
+MIRCLASS_BASE_URL=http://localhost:8080 python scripts/test_startup_vkr_e2e.py
+```
+
+Подробности: `docs/startup_vkr_agent_flow.md`.
+
 ## API
 
 - `GET /health`, `GET /health/live`, `GET /health/ready`
@@ -128,6 +165,8 @@ Demo-методологии `UNIVERSAL_DOCUMENT` и `STARTUP_VKR` не явля�
 - `POST /api/v1/analyses/{analysis_id}/cancel`
 - `POST /api/v1/analyses/{analysis_id}/reports`
 - `GET /api/v1/analyses/{analysis_id}/reports/{report_id}`
+- `GET /api/v1/assessments/{assessment_id}/result`
+- `GET /api/v1/assessments/{assessment_id}/progress`
 - `POST /api/v1/chat/messages`
 - `POST /api/v1/tts`
 - `GET /api/v1/media/audio/{audio_id}`
@@ -135,6 +174,11 @@ Demo-методологии `UNIVERSAL_DOCUMENT` и `STARTUP_VKR` не явля�
 - `POST /api/v1/internal/assessments/{assessment_id}/execute`
 - `GET /api/v1/internal/assessments/{assessment_id}/execution`
 - `GET /api/v1/internal/assessments/{assessment_id}/indicator-results`
+- `GET /api/v1/internal/assessments/{assessment_id}/gates/current`
+- `POST /api/v1/internal/assessments/{assessment_id}/gates/{gate_code}/approve`
+- `POST /api/v1/internal/assessments/{assessment_id}/gates/{gate_code}/return`
+- `POST /api/v1/internal/assessments/{assessment_id}/resume`
+- `POST /api/v1/internal/assessments/{assessment_id}/retry-failed`
 
 Ошибки возвращаются в формате:
 

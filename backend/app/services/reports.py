@@ -44,7 +44,8 @@ class ReportService:
             f"Файл: {document.original_name}",
             f"Дата анализа: {analysis.completed_at or analysis.created_at}",
             f"ID анализа: {analysis.id}",
-            f"Общий балл: {payload.get('overall_score')} / 100",
+            f"Методология: {(payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {(payload.get('methodology') or {}).get('methodology_version', analysis.methodology_version)}",
+            f"Общий балл: {payload.get('overall_score')} / 100" if payload.get("overall_score") else "Общий балл: не рассчитывался",
             f"Заключение: {payload.get('verdict')}",
             "",
             "Оценки по критериям:",
@@ -61,12 +62,29 @@ class ReportService:
         lines.extend(["", "Рекомендации:"])
         for item in payload.get("recommendations", []):
             lines.append(f"- {item.get('priority')}: {item.get('title')} Эффект: {item.get('effect')}. Сложность: {item.get('complexity')}.")
+        lines.extend(["", "Доказательные фрагменты:"])
+        for item in payload.get("evidence", []):
+            lines.append(f"- {item.get('section') or 'Фрагмент'}: {item.get('quote')}")
+        extra = payload.get("extra_blocks") or {}
+        lines.extend(["", "Противоречия:"])
+        lines.extend(f"- {item}" for item in extra.get("contradictions", []))
+        lines.extend(["", "Вопросы автору:"])
+        lines.extend(f"- {item}" for item in extra.get("questions_to_author", []))
+        lines.extend(["", "Ограничения анализа:"])
+        lines.extend(f"- {item}" for item in extra.get("limitations", []))
         ai_risk = payload.get("ai_risk") or {}
         lines.extend(
             [
                 "",
+                "Отметка об использовании AI: анализ выполнен с использованием LLM-агентов; выводы требуют человеческой проверки.",
                 f"Уровень риска использования генеративного ИИ: {ai_risk.get('level')}",
                 ai_risk.get("disclaimer", ""),
+                "",
+                "Техническое приложение:",
+                f"Assessment ID: {extra.get('assessment_id')}",
+                f"Токены: {extra.get('total_tokens')}",
+                f"Стоимость, RUB: {extra.get('total_cost_rub')}",
+                f"Время обработки, ms: {extra.get('processing_time_ms')}",
             ]
         )
         if settings.mock_analysis_enabled:

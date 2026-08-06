@@ -46,6 +46,10 @@ class LLMCallTraceCreate(BaseModel):
     analysis_id: str | None = None
     assessment_id: str | None = None
     task_run_id: str | None = None
+    agent_task_run_id: str | None = None
+    methodology_agent_id: str | None = None
+    agent_code: str | None = None
+    stage_code: str | None = None
     criterion_id: str | None = None
     indicator_id: str | None = None
     prompt_template_id: str | None = None
@@ -119,6 +123,10 @@ class LLMCallTraceResponse(BaseModel):
     analysis_id: str | None
     assessment_id: str | None
     task_run_id: str | None
+    agent_task_run_id: str | None = None
+    methodology_agent_id: str | None = None
+    agent_code: str | None = None
+    stage_code: str | None = None
     criterion_id: str | None
     indicator_id: str | None
     prompt_template_id: str | None

@@ -438,6 +438,19 @@ function renderResults(result) {
 }
 
 function normalizeResult(result) {
+  const extraBlocks = result.extra_blocks || {};
+  const trace = result.trace || [];
+  const technicalFactors = [
+    result.methodology?.methodology_id && result.methodology?.methodology_version
+      ? `Методология: ${result.methodology.methodology_id} ${result.methodology.methodology_version}`
+      : null,
+    extraBlocks.assessment_id ? `Assessment ID: ${extraBlocks.assessment_id}` : null,
+    extraBlocks.total_tokens ? `LLM tokens: ${extraBlocks.total_tokens}` : null,
+    extraBlocks.total_cost_rub ? `LLM cost: ${extraBlocks.total_cost_rub} RUB` : null,
+    trace.length ? `Agent trace records: ${trace.length}` : null,
+  ].filter(Boolean);
+  const aiRisk = result.ai_risk || { factors: result.aiRiskFactors || [] };
+
   return {
     analysis_id: result.analysis_id || state.analysisId,
     overall_score: result.overall_score ?? 87,
@@ -451,7 +464,7 @@ function normalizeResult(result) {
     strengths: result.strengths || [],
     improvements: result.improvements || [],
     remarks: result.remarks || [],
-    aiRisk: result.ai_risk || { factors: result.aiRiskFactors || [] },
+    aiRisk: { ...aiRisk, factors: [...(aiRisk.factors || []), ...technicalFactors] },
     recommendations: result.recommendations || recommendationPlan,
   };
 }

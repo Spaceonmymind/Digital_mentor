@@ -102,6 +102,12 @@ class LLMCall(Base):
     task_run_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("assessment_task_runs.id", use_alter=True), nullable=True
     )
+    agent_task_run_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("agent_task_runs.id", use_alter=True), nullable=True
+    )
+    methodology_agent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("methodology_agents.id"), nullable=True)
+    agent_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stage_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     criterion_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("methodology_criteria.id"), nullable=True)
     indicator_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("methodology_indicators.id"), nullable=True)
     prompt_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("prompt_templates.id"), nullable=True)

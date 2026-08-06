@@ -31,9 +31,11 @@ class WorkerExecutor:
         llm_client: LLMClient | None = None,
         context_builder: ExecutionContextBuilder | None = None,
         prompt_renderer: PromptRenderer | None = None,
+        analysis_id: str | None = None,
     ):
         self.session = session
         self.llm_client = llm_client
+        self.analysis_id = analysis_id
         self.context_builder = context_builder or ExecutionContextBuilder(session)
         self.prompt_renderer = prompt_renderer or PromptRenderer()
         self.trace_service = LLMTraceService(session)
@@ -69,6 +71,7 @@ class WorkerExecutor:
                         temperature=settings.ai_worker_temperature,
                         max_completion_tokens=settings.ai_worker_max_completion_tokens,
                         seed=settings.ai_worker_seed,
+                        analysis_id=self.analysis_id,
                         assessment_id=assessment.id,
                         task_run_id=task_run.id,
                         criterion_id=criterion.id,
@@ -82,8 +85,10 @@ class WorkerExecutor:
                 await self.session.commit()
                 raise exc
             output = self._validate_output(llm_result.output)
+            output = self._verify_evidence(output, context.document_excerpt)
             llm_call = await self.trace_service.record_result(
                 llm_result,
+                analysis_id=self.analysis_id,
                 assessment_id=assessment.id,
                 task_run_id=task_run.id,
                 criterion_id=criterion.id,
@@ -295,3 +300,16 @@ class WorkerExecutor:
 
     def _legacy_recommendation(self, output: WorkerIndicatorOutput) -> str | None:
         return output.recommendations[0] if output.recommendations else None
+
+    def _verify_evidence(self, output: WorkerIndicatorOutput, document_text: str) -> WorkerIndicatorOutput:
+        evidence = []
+        for item in output.evidence:
+            if item.quote and item.quote not in document_text:
+                item = item.model_copy(
+                    update={
+                        "quote": None,
+                        "explanation": f"{item.explanation} [quote_not_found_in_extracted_text]",
+                    }
+                )
+            evidence.append(item)
+        return output.model_copy(update={"evidence": evidence})
