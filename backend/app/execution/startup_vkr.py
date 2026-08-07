@@ -33,7 +33,7 @@ from app.execution.schemas import (
 )
 from app.execution.worker import WorkerExecutor
 from app.llm.client import LLMClient
-from app.llm.registry import AGGREGATOR, CRITIC, FINAL_EXPERT
+from app.llm.registry import AGGREGATOR, CRITIC, FINAL_EXPERT, WORKER
 from app.llm.schemas import LLMCallTraceCreate, LLMResult
 from app.llm.trace_service import LLMTraceService
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, PromptTemplate
@@ -49,21 +49,25 @@ logger = logging.getLogger(__name__)
 DEMO_AGENT_CONFIG = {
     "A-15": {
         "title": "Критический анализ",
+        "model": WORKER,
         "block_names": ["Резюме", "Описание проблемы"],
         "focus": "актуальность проблемы, качество решения, целевая аудитория и главное противоречие",
     },
     "A-16": {
         "title": "Экономика",
+        "model": CRITIC,
         "block_names": ["Экономика"],
         "focus": "экономическая модель, выручка, unit-экономика, go/no-go и слабые финансовые допущения",
     },
     "A-17": {
         "title": "Архитектура",
+        "model": WORKER,
         "block_names": ["Архитектура"],
         "focus": "архитектурная реализуемость, роли компонентов, данные, отказные сценарии",
     },
     "A-28": {
         "title": "Риски",
+        "model": CRITIC,
         "block_names": ["Риски", "Заключение"],
         "focus": "основные риски, злоупотребления, ограничения и практические угрозы внедрения",
     },
@@ -249,7 +253,8 @@ class StartupVkrAgentFlow:
             prompt = await self.session.get(PromptTemplate, agent.prompt_template_id)
             if prompt is None:
                 raise execution_error("CRITIC_PROMPT_NOT_FOUND", "Шаблон промпта critic не найден", status_code=404)
-            idempotency_key = await self._agent_idempotency_key(assessment, methodology, agent, prompt, f"{CRITIC}:demo")
+            model = DEMO_AGENT_CONFIG[agent.code]["model"]
+            idempotency_key = await self._agent_idempotency_key(assessment, methodology, agent, prompt, f"{model}:demo")
             task_run = await self._start_agent_run(assessment.id, agent, idempotency_key)
             runs.append((agent, task_run, idempotency_key))
 
@@ -268,7 +273,7 @@ class StartupVkrAgentFlow:
                 f"<document_blocks>\n{context}\n</document_blocks>"
             )
             started = time.monotonic()
-            result = await self._ask(CRITIC, system, user, DemoAgentOutput, 0, 700)
+            result = await self._ask(config["model"], system, user, DemoAgentOutput, 0, 500)
             return agent.code, result, int((time.monotonic() - started) * 1000)
 
         raw_results = await asyncio.gather(*(call_agent(agent) for agent, _, _ in runs), return_exceptions=True)

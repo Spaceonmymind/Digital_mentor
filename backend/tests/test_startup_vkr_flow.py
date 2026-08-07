@@ -335,7 +335,8 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert payload.overall_score == 47
     assert payload.extra_blocks["mode"] == "demo"
     assert payload.extra_blocks["demo_report"]["overall_score"] == 47
-    assert [call["model"] for call in llm.calls].count(CRITIC) == 4
+    assert [call["model"] for call in llm.calls].count(WORKER) == 2
+    assert [call["model"] for call in llm.calls].count(CRITIC) == 2
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
     assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
     assert metrics["mode"] == "demo"
