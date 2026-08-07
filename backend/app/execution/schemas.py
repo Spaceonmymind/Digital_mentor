@@ -349,10 +349,17 @@ class DemoAgentOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(..., min_length=1, max_length=500)
-    strengths: list[str] = Field(..., max_length=3)
-    issues: list[str] = Field(..., max_length=3)
-    recommendations: list[str] = Field(..., max_length=3)
+    strengths: list[str]
+    issues: list[str]
+    recommendations: list[str]
     score: int = Field(..., ge=0, le=10)
+
+    @model_validator(mode="after")
+    def limit_demo_lists(self):
+        self.strengths = self.strengths[:3]
+        self.issues = self.issues[:3]
+        self.recommendations = self.recommendations[:3]
+        return self
 
 
 class DemoCriterionScore(BaseModel):
@@ -367,15 +374,20 @@ class DemoFinalReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     overall_score: int = Field(..., ge=0, le=60)
-    criteria: list[DemoCriterionScore] = Field(..., min_length=6, max_length=6)
-    strengths: list[str] = Field(..., min_length=3, max_length=3)
-    remarks: list[str] = Field(..., min_length=3, max_length=3)
-    recommendations: list[str] = Field(..., min_length=3, max_length=3)
+    criteria: list[DemoCriterionScore]
+    strengths: list[str]
+    remarks: list[str]
+    recommendations: list[str]
     conclusion: str = Field(..., min_length=1, max_length=500)
     spoken_summary: str = Field(..., min_length=1, max_length=700)
 
     @model_validator(mode="after")
     def validate_score_sum(self):
+        if len(self.criteria) != 6:
+            raise ValueError("demo final report requires exactly 6 criteria")
+        self.strengths = self.strengths[:3]
+        self.remarks = self.remarks[:3]
+        self.recommendations = self.recommendations[:3]
         total = sum(item.score for item in self.criteria)
         if self.overall_score != total:
             raise ValueError("overall_score must equal sum of criteria scores")

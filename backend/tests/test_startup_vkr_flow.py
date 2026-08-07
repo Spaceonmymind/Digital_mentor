@@ -398,6 +398,16 @@ def test_mentor_report_rejects_internal_terms_and_invalid_stage_score():
         MentorReport.model_validate(invalid_score)
 
 
+def test_demo_schemas_do_not_emit_unsupported_array_size_keywords():
+    agent_schema = DemoAgentOutput.model_json_schema()
+    final_schema = DemoFinalReport.model_json_schema()
+
+    schema_text = f"{agent_schema}{final_schema}"
+
+    assert "maxItems" not in schema_text
+    assert "minItems" not in schema_text
+
+
 def test_student_pdf_uses_mentor_report_without_technical_dump():
     report = FakeStartupLLM()._mentor_report().model_dump(mode="json")
     analysis = Analysis(
