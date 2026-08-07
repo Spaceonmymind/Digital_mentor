@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
-from app.execution.schemas import MentorAnalysisResultPayload
+from app.execution.schemas import MentorAnalysisResultPayload, TechnicalAssessmentResult
 from app.execution.startup_vkr import StartupVkrAgentFlow
 
 
@@ -53,3 +53,11 @@ async def retry_failed_assessment(
     session: AsyncSession = Depends(get_session),
 ) -> MentorAnalysisResultPayload:
     return await StartupVkrAgentFlow(session).retry_failed(assessment_id)
+
+
+@router.get("/{assessment_id}/technical-result", response_model=TechnicalAssessmentResult)
+async def get_technical_assessment_result(
+    assessment_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> TechnicalAssessmentResult:
+    return await StartupVkrAgentFlow(session).technical_result(assessment_id)

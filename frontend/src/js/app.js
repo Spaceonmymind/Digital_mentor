@@ -412,16 +412,17 @@ function renderResults(result) {
       ({ title, score, explanation }) => `
         <div class="criterion">
           <span>${title}<small>${explanation || getScoreLevel(score)}</small></span>
-          <div class="progress"><span style="width: ${score}%"></span></div>
-          <strong>${score}% · ${getScoreLevel(score)}</strong>
+          <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : score}%"></span></div>
+          <strong>${normalized.isMentorReport ? `${score}/5` : `${score}% · ${getScoreLevel(score)}`}</strong>
         </div>
       `,
     )
     .join("");
 
-  document.querySelector(".score-card strong").textContent = `${normalized.overall_score} / 100`;
+  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : "Итоговая оценка";
+  document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : `${normalized.overall_score} / 100`;
   document.querySelector(".score-card > div span").textContent = normalized.verdict;
-  document.querySelector(".score-ring").textContent = normalized.overall_score;
+  document.querySelector(".score-ring").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.overall_score;
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
@@ -439,16 +440,10 @@ function renderResults(result) {
 
 function normalizeResult(result) {
   const extraBlocks = result.extra_blocks || {};
-  const trace = result.trace || [];
-  const technicalFactors = [
-    result.methodology?.methodology_id && result.methodology?.methodology_version
-      ? `Методология: ${result.methodology.methodology_id} ${result.methodology.methodology_version}`
-      : null,
-    extraBlocks.assessment_id ? `Assessment ID: ${extraBlocks.assessment_id}` : null,
-    extraBlocks.total_tokens ? `LLM tokens: ${extraBlocks.total_tokens}` : null,
-    extraBlocks.total_cost_rub ? `LLM cost: ${extraBlocks.total_cost_rub} RUB` : null,
-    trace.length ? `Agent trace records: ${trace.length}` : null,
-  ].filter(Boolean);
+  const mentorReport = extraBlocks.mentor_report || result.report || null;
+  if (mentorReport) {
+    return normalizeMentorReportResult(result, mentorReport);
+  }
   const aiRisk = result.ai_risk || { factors: result.aiRiskFactors || [] };
 
   return {
@@ -464,8 +459,65 @@ function normalizeResult(result) {
     strengths: result.strengths || [],
     improvements: result.improvements || [],
     remarks: result.remarks || [],
-    aiRisk: { ...aiRisk, factors: [...(aiRisk.factors || []), ...technicalFactors] },
+    aiRisk,
     recommendations: result.recommendations || recommendationPlan,
+    isMentorReport: false,
+  };
+}
+
+function normalizeMentorReportResult(result, report) {
+  const objections = report.objections || [];
+  const nextStep = report.one_next_step || {};
+  const question = report.one_question || {};
+  const stageItems = report.stage_assessments || [];
+  const currentStage = report.header?.current_stage || "S?";
+  const vetoFactors = report.veto?.is_active
+    ? [
+        "ВЕТО",
+        `Причина: ${report.veto.reason}`,
+        `Что нужно для снятия: ${report.veto.how_to_remove}`,
+      ]
+    : [];
+  return {
+    analysis_id: result.analysis_id || state.analysisId,
+    overall_score: 0,
+    currentStage,
+    verdict: report.what_this_work_is || "Разбор сформирован.",
+    criteria: stageItems.map((item) => ({
+      title: `${item.stage_code} ${item.title}`,
+      score: item.score,
+      explanation: `${item.completed} До следующего уровня: ${item.next_level_requirement}`,
+    })),
+    strengths: report.what_survived || [],
+    improvements: objections.map((item) => `${item.title}. Что не работает: ${item.what_does_not_work} Почему: ${item.why} Куда двигаться: ${item.where_to_move}`),
+    remarks: objections.map((item, index) => ({
+      title: item.title,
+      quote: "",
+      comment: `${item.what_does_not_work}\n\nПочему: ${item.why}`,
+      recommendation: item.where_to_move,
+      severity: index === 0 ? "high" : "medium",
+    })),
+    aiRisk: {
+      level: "medium",
+      factors: [
+        ...vetoFactors,
+        `Один вопрос: ${question.question || "не сформирован"}`,
+        `Следующий шаг: ${nextStep.step || "не сформирован"}`,
+        `Проверка результата шага: ${nextStep.check_result || "не указана"}`,
+      ],
+      disclaimer: "Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.",
+    },
+    recommendations: [
+      {
+        priority: "1",
+        title: nextStep.step || "Сформулировать следующий проверяемый шаг.",
+        effect: nextStep.check_result || "Появится проверяемое основание для следующей стадии.",
+        complexity: "Средняя",
+      },
+    ],
+    mentorReport: report,
+    spokenSummary: report.spoken_summary || "",
+    isMentorReport: true,
   };
 }
 
@@ -476,8 +528,10 @@ function getScoreLevel(score) {
 }
 
 function renderSummary(result) {
-  elements.summaryScore.textContent = result.overall_score;
-  elements.summaryVerdict.textContent = `${result.verdict}. Основные направления развития связаны с методологией, аргументацией и практическим обоснованием.`;
+  elements.summaryScore.textContent = result.isMentorReport ? result.currentStage : result.overall_score;
+  const summaryScoreCaption = document.querySelector(".summary-score span");
+  if (summaryScoreCaption) summaryScoreCaption.textContent = result.isMentorReport ? "текущая стадия" : "из 100";
+  elements.summaryVerdict.textContent = result.spokenSummary || result.verdict;
   renderList(elements.summaryStrengths, result.strengths.slice(0, 3));
   renderList(elements.summaryImprovements, result.improvements.slice(0, 3));
 }
@@ -690,7 +744,8 @@ async function startAnalysis() {
     renderDirections();
     renderChat();
     showStage("summary");
-    setMentor("success", `Анализ завершен. Общая оценка ${normalizeResult(result).overall_score} из 100. Работа выполнена на хорошем уровне.`);
+    const normalized = normalizeResult(result);
+    setMentor("success", normalized.spokenSummary || `Анализ завершен. Текущая стадия работы: ${normalized.currentStage || "не определена"}.`);
   } catch (error) {
     showError("Не удалось обработать документ", error.message || "Проверьте, что файл не поврежден и содержит текстовый слой.", error.body?.error?.request_id);
   }

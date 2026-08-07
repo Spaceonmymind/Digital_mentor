@@ -34,12 +34,15 @@ class MethodologyRepository:
         return methodology
 
     async def get_by_code(self, code: str) -> Methodology | None:
-        result = await self.session.execute(select(Methodology).where(Methodology.code == code).limit(1))
+        result = await self.session.execute(select(Methodology).where(Methodology.code == code).order_by(Methodology.version.desc()).limit(1))
         return result.scalar_one_or_none()
 
     async def get_active(self, code: str) -> Methodology | None:
         result = await self.session.execute(
-            select(Methodology).where(Methodology.code == code, Methodology.is_active.is_(True)).limit(1)
+            select(Methodology)
+            .where(Methodology.code == code, Methodology.is_active.is_(True))
+            .order_by(Methodology.version.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -59,6 +62,7 @@ class MethodologyRepository:
                 selectinload(Methodology.prompts),
                 selectinload(Methodology.agents),
             )
+            .order_by(Methodology.version.desc())
             .limit(1)
         )
         return result.scalar_one_or_none()

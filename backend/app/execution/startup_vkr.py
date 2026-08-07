@@ -21,10 +21,11 @@ from app.execution.prompt_renderer import PromptRenderer
 from app.execution.schemas import (
     AgentExecutionResult,
     CriticOutput,
-    FinalExpertOutput,
+    MentorReport,
     MentorAgentTraceItem,
     MentorAnalysisResultPayload,
     MentorCriterionResult,
+    TechnicalAssessmentResult,
 )
 from app.execution.worker import WorkerExecutor
 from app.llm.client import LLMClient
@@ -32,6 +33,7 @@ from app.llm.registry import AGGREGATOR, CRITIC, FINAL_EXPERT
 from app.llm.schemas import LLMCallTraceCreate, LLMResult
 from app.llm.trace_service import LLMTraceService
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, PromptTemplate
+from app.methodology.seeds.startup_vkr.data import METHODOLOGY_VERSION as STARTUP_VKR_CURRENT_VERSION
 from app.pipeline.schemas import PipelineBuildRequest
 from app.pipeline.service import PipelineService
 from app.schemas.methodology import AgentTraceItem, AnalysisEvidence, MethodologyReference
@@ -128,6 +130,24 @@ class StartupVkrAgentFlow:
         if result is None:
             raise execution_error("ASSESSMENT_RESULT_NOT_FOUND", "Итоговый результат еще не сформирован", status_code=404)
         return MentorAnalysisResultPayload.model_validate(result.result_json)
+
+    async def student_result(self, assessment_id: str) -> dict:
+        payload = await self.result(assessment_id)
+        if payload.report is None:
+            raise execution_error("MENTOR_REPORT_VALIDATION_FAILED", "A-01 не сформировал MentorReport", status_code=500)
+        return self._student_report_json(payload.report)
+
+    async def technical_result(self, assessment_id: str) -> TechnicalAssessmentResult:
+        payload = await self.result(assessment_id)
+        if payload.technical is None:
+            raise execution_error("ASSESSMENT_RESULT_NOT_FOUND", "Технический результат не найден", status_code=404)
+        return payload.technical
+
+    def _student_report_json(self, report: MentorReport) -> dict:
+        payload = report.model_dump(mode="json")
+        if not settings.mentor_block_visible_to_student:
+            payload.pop("mentor_block", None)
+        return payload
 
     async def current_gate(self, assessment_id: str) -> dict:
         decisions = (
@@ -243,7 +263,7 @@ class StartupVkrAgentFlow:
                 FINAL_EXPERT,
                 system,
                 user,
-                FinalExpertOutput,
+                MentorReport,
                 settings.ai_final_expert_temperature,
                 settings.ai_final_expert_max_completion_tokens,
             )
@@ -330,7 +350,7 @@ class StartupVkrAgentFlow:
         processing_time_ms: int,
     ) -> MentorAnalysisResultPayload:
         final_agent_result = await self.session.get(AgentResult, final_result.agent_result_id)
-        final = FinalExpertOutput.model_validate(final_agent_result.output_json)
+        report = MentorReport.model_validate(final_agent_result.output_json)
         llm_calls = (
             await self.session.execute(select(LLMCall).where(LLMCall.assessment_id == assessment.id))
         ).scalars().all()
@@ -343,7 +363,7 @@ class StartupVkrAgentFlow:
         trace = [
             MentorAgentTraceItem(
                 agent_code=result.agent_code,
-                agent_version="anti_during_v1",
+                agent_version="anti_during_v1_26_impl_v1_10",
                 model_role=result.model_role,
                 llm_call_id=result.llm_call_id,
                 evidence_references=[],
@@ -360,25 +380,48 @@ class StartupVkrAgentFlow:
             )
             for item in worker_package
         ]
+        technical = TechnicalAssessmentResult(
+            assessment_id=assessment.id,
+            document_id=assessment.artifact_id,
+            methodology_code=methodology.code,
+            methodology_version=methodology.version,
+            anti_during_method_version="1.26",
+            anti_during_implementation_version="1.10",
+            agent_trace=trace,
+            worker_results=worker_package,
+            critic_results=[
+                {"agent_code": result.agent_code, "output": result.output_json, "llm_call_id": result.llm_call_id}
+                for result in agent_results
+                if result.model_role == "critic"
+            ],
+            final_result=report.model_dump(mode="json"),
+            evidence_diagnostics=self._evidence_diagnostics(worker_package),
+            total_tokens=total_tokens,
+            total_cost_rub=total_cost,
+            processing_time_ms=processing_time_ms,
+        )
         payload = MentorAnalysisResultPayload(
             assessment_id=assessment.id,
             document_id=assessment.artifact_id,
             methodology_code=methodology.code,
             methodology_version=methodology.version,
-            status=final.overall_status,
-            overall_score=final.overall_score,
-            executive_summary=final.executive_summary,
+            status="requires_revision" if not report.veto.is_active else "insufficient_data",
+            overall_score=None,
+            executive_summary=report.what_this_work_is,
             criteria=criteria,
-            strengths=final.strengths,
-            issues=final.key_issues,
-            contradictions=final.contradictions,
-            recommendations=final.priority_recommendations,
-            questions_to_author=final.questions_to_author,
+            strengths=report.what_survived,
+            issues=[item.title for item in report.objections],
+            contradictions=[item.why for item in report.objections],
+            recommendations=[],
+            questions_to_author=[report.one_question.question],
             agent_trace=trace,
             total_tokens=total_tokens,
             total_cost_rub=total_cost,
             processing_time_ms=processing_time_ms,
-            limitations=final.limitations,
+            limitations=[],
+            report=report,
+            technical=technical,
+            spoken_summary=report.spoken_summary,
         )
         stored = (
             await self.session.execute(
@@ -389,7 +432,7 @@ class StartupVkrAgentFlow:
             stored = MentorAnalysisResult(assessment_id=assessment.id, document_id=assessment.artifact_id)
         stored.methodology_code = methodology.code
         stored.methodology_version = methodology.version
-        stored.status = final.overall_status
+        stored.status = payload.status
         stored.result_json = payload.model_dump(mode="json")
         stored.total_tokens = total_tokens
         stored.total_cost_rub = total_cost
@@ -397,6 +440,20 @@ class StartupVkrAgentFlow:
         self.session.add(stored)
         await self.session.commit()
         return payload
+
+    def _evidence_diagnostics(self, worker_package: list[dict]) -> list[dict]:
+        diagnostics = []
+        for item in worker_package:
+            for evidence in item.get("evidence") or []:
+                diagnostics.append(
+                    {
+                        "indicator_result_id": item.get("indicator_result_id"),
+                        "indicator": item.get("indicator"),
+                        "evidence_status": "verified" if evidence.get("quote") else "unverified",
+                        "section": evidence.get("section"),
+                    }
+                )
+        return diagnostics
 
     async def _assessment(self, assessment_id: str) -> Assessment:
         assessment = await self.session.get(Assessment, assessment_id)
@@ -581,7 +638,14 @@ class StartupVkrAgentFlow:
 
     def _agent_rules(self, agent_code: str) -> str:
         rules = {
-            "A-15": "Ищи мнимую новизну, эклектику, неподтвержденные утверждения и слишком сильные выводы.",
+            "A-15": (
+                "Ищи мнимую новизну, эклектику, неподтвержденные утверждения и слишком сильные выводы. "
+                "Обязательно выполни девятую проверку ред.1.26: если заявлены приватность, суверенитет, "
+                "децентрализация, устойчивость к цензуре или отсутствие центрального доверенного посредника, "
+                "найди компонент архитектуры, способный нарушить это свойство. Требуй техническое доказательство "
+                "невозможности злоупотребления; 'оператор не будет', 'система доверенная' и 'доступ ограничен политикой' "
+                "не являются доказательством."
+            ),
             "A-16": "Ищи плохие пути, злоупотребления, отказные сценарии и противоречия конструкции.",
             "A-17": "Проверяй экономику принятия, стимулы, условия да/нет; не предсказывай успех.",
             "A-28": "Проверяй конкретность адресата, его текущую работу и мотив изменить поведение.",
@@ -615,7 +679,7 @@ class StartupVkrAnalysisEngine:
                 )
             )
             analysis.methodology_id = "STARTUP_VKR"
-            analysis.methodology_version = "1.0"
+            analysis.methodology_version = STARTUP_VKR_CURRENT_VERSION
             await self._event(session, analysis, "worker", 30, "Первичный анализ")
             mentor_payload = await StartupVkrAgentFlow(session).execute(pipeline.assessment_id, analysis_id=analysis.id)
             await self._event(session, analysis, "final", 90, "Формирование рекомендаций")
@@ -648,77 +712,69 @@ class StartupVkrAnalysisEngine:
         await session.commit()
 
     def _analysis_payload(self, analysis_id: str, mentor: MentorAnalysisResultPayload) -> AnalysisResultPayload:
+        report = mentor.report
+        if report is None:
+            raise execution_error("MENTOR_REPORT_VALIDATION_FAILED", "A-01 не сформировал MentorReport", status_code=500)
         criteria = [
             CriterionResult(
                 code=str(index + 1),
-                title=item.criterion,
-                score=0,
-                explanation=item.summary,
+                title=item.title,
+                score=item.score * 20,
+                explanation=f"{item.completed} До следующего уровня: {item.next_level_requirement}",
             )
-            for index, item in enumerate(mentor.criteria)
+            for index, item in enumerate(report.stage_assessments)
         ]
         remarks = [
-            RemarkResult(title=issue[:120], quote="", recommendation="См. рекомендации и вопросы автору.", severity="medium")
-            for issue in mentor.issues[:8]
+            RemarkResult(
+                title=item.title[:120],
+                quote="",
+                recommendation=item.where_to_move,
+                severity="high" if index == 0 else "medium",
+            )
+            for index, item in enumerate(report.objections)
         ]
         recommendations = [
             RecommendationResult(
-                priority=str(item.priority),
-                title=item.title,
-                effect=item.expected_effect,
-                complexity=item.difficulty,
+                priority="1",
+                title=report.one_next_step.step,
+                effect=report.one_next_step.check_result,
+                complexity="Средняя",
             )
-            for item in mentor.recommendations
         ]
-        evidence = []
-        for criterion in mentor.criteria:
-            for indicator in criterion.indicators:
-                for item in indicator.get("evidence") or []:
-                    evidence.append(
-                        AnalysisEvidence(
-                            document_id=mentor.document_id,
-                            quote=item.get("quote") or item.get("explanation", ""),
-                            page=item.get("page"),
-                            section=item.get("section"),
-                            extra={"agent_code": "worker"},
-                        )
-                    )
         return AnalysisResultPayload(
             analysis_id=analysis_id,
-            overall_score=mentor.overall_score or 0,
-            verdict=mentor.executive_summary,
+            overall_score=0,
+            verdict=report.what_this_work_is,
             criteria=criteria,
-            strengths=mentor.strengths,
-            improvements=mentor.issues,
+            strengths=report.what_survived,
+            improvements=[item.title for item in report.objections],
             remarks=remarks,
             ai_risk=AiRiskResult(
                 level="medium",
                 score=None,
-                factors=["Использованы LLM-агенты; выводы требуют человеческой проверки"],
-                disclaimer="AI-анализ не является подписью человека и не заменяет научного руководителя или экспертный совет.",
+                factors=[
+                    f"Текущая стадия работы: {report.header.current_stage}",
+                    f"Один вопрос: {report.one_question.question}",
+                    f"Следующий шаг: {report.one_next_step.step}",
+                ],
+                disclaimer="Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.",
             ),
             recommendations=recommendations,
-            trace=[
-                AgentTraceItem(
-                    agent_code=item.agent_code,
-                    status="completed",
-                    output_reference=item.llm_call_id,
-                )
-                for item in mentor.agent_trace
-            ],
+            trace=[],
             methodology=MethodologyReference(
                 methodology_id=mentor.methodology_code,
                 methodology_version=mentor.methodology_version,
             ),
-            evidence=evidence,
+            evidence=[],
             extra_blocks={
-                "assessment_id": mentor.assessment_id,
                 "status": mentor.status,
-                "contradictions": mentor.contradictions,
-                "questions_to_author": mentor.questions_to_author,
-                "limitations": mentor.limitations,
-                "total_tokens": mentor.total_tokens,
-                "total_cost_rub": str(mentor.total_cost_rub) if mentor.total_cost_rub is not None else None,
-                "processing_time_ms": mentor.processing_time_ms,
+                "mentor_report": self._student_report_json(report),
+                "spoken_summary": report.spoken_summary,
             },
         )
+
+    def _student_report_json(self, report: MentorReport) -> dict:
+        payload = report.model_dump(mode="json")
+        if not settings.mentor_block_visible_to_student:
+            payload.pop("mentor_block", None)
+        return payload

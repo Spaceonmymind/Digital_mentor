@@ -197,7 +197,7 @@
                 <section class="card summary-card">
                   <p class="eyebrow">Анализ завершен</p>
                   <h2>Краткое резюме</h2>
-                  <div class="summary-score"><strong id="summaryScore">87</strong><span>из 100</span></div>
+                  <div class="summary-score"><strong id="summaryScore">S?</strong><span>текущая стадия</span></div>
                   <p id="summaryVerdict">Работа выполнена на хорошем уровне.</p>
                   <div class="summary-grid">
                     <div>
@@ -220,33 +220,33 @@
               <div class="workspace-stage" id="resultsStage">
                 <nav class="results-nav" aria-label="Навигация по результатам">
                   <a href="#resultOverview">Обзор</a>
-                  <a href="#resultCriteria">Критерии</a>
-                  <a href="#resultRemarks">Замечания</a>
-                  <a href="#resultRecommendations">Рекомендации</a>
+                  <a href="#resultCriteria">Стадии</a>
+                  <a href="#resultRemarks">Возражения</a>
+                  <a href="#resultRecommendations">Следующий шаг</a>
                   <a href="#resultChat">Диалог</a>
                 </nav>
                 <div class="results-grid">
                   <section class="card score-card" id="resultOverview">
                     <div>
-                      <p class="eyebrow">Итоговая оценка</p>
-                      <strong>87 / 100</strong>
+                      <p class="eyebrow">Текущая стадия</p>
+                      <strong>S?</strong>
                       <span>Работа выполнена на хорошем уровне</span>
                     </div>
                     <div class="score-ring">87</div>
                   </section>
 
                   <section class="card criteria-card" id="resultCriteria">
-                    <h2>Критерии оценки</h2>
+                    <h2>Путь работы по стадиям</h2>
                     <div id="criteriaList"></div>
                   </section>
 
                   <section class="card list-card">
-                    <h2>Сильные стороны работы</h2>
+                    <h2>Что устояло</h2>
                     <ul id="strengthsList"></ul>
                   </section>
 
                   <section class="card list-card">
-                    <h2>Что можно улучшить</h2>
+                    <h2>Главные возражения</h2>
                     <ul id="improvementsList"></ul>
                   </section>
                 </div>
@@ -255,7 +255,7 @@
                   <div class="section-heading">
                     <span data-icon="message-square-warning"></span>
                     <div>
-                      <h2>Анализ фрагмента документа</h2>
+                      <h2>Возражения</h2>
                     </div>
                   </div>
                   <div class="document-review__grid">
@@ -271,18 +271,18 @@
                   <div class="section-heading">
                     <span data-icon="sparkles"></span>
                     <div>
-                      <h2>Признаки использования генеративного ИИ</h2>
+                      <h2>Один вопрос и следующий шаг</h2>
                     </div>
                   </div>
                   <ul id="aiRiskList"></ul>
-                  <p class="disclaimer">Результат является аналитическим показателем и не может рассматриваться как доказательство использования генеративного ИИ.</p>
+                  <p class="disclaimer">Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.</p>
                 </section>
 
                 <section class="recommendation-section" id="resultRecommendations">
                   <div class="section-heading">
                     <span data-icon="route"></span>
                     <div>
-                      <h2>План улучшения работы</h2>
+                      <h2>Следующий шаг</h2>
                     </div>
                   </div>
                   <div class="recommendation-grid" id="recommendationPlan"></div>

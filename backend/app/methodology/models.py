@@ -10,9 +10,10 @@ from app.db.base import Base
 
 class Methodology(Base):
     __tablename__ = "methodologies"
+    __table_args__ = (UniqueConstraint("code", "version", name="uq_methodologies_code_version"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    code: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
+    code: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     version: Mapped[str] = mapped_column(String(128), nullable=False)

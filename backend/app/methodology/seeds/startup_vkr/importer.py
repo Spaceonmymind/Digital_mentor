@@ -2,18 +2,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate
-from app.methodology.seeds.startup_vkr.data import AGENTS, CRITERIA, METHODOLOGY_ID, PROMPTS, SOURCE, VERSION
+from app.methodology.seeds.startup_vkr.data import AGENTS, CRITERIA, METHODOLOGY_ID, METHODOLOGY_VERSION, PROMPTS, SOURCE, VERSION
 
 
 async def ensure_startup_vkr_seed(session: AsyncSession) -> Methodology:
     methodology = (
-        await session.execute(select(Methodology).where(Methodology.code == "STARTUP_VKR").limit(1))
+        await session.execute(select(Methodology).where(Methodology.code == "STARTUP_VKR", Methodology.version == METHODOLOGY_VERSION).limit(1))
     ).scalar_one_or_none()
     if methodology is None:
         methodology = Methodology(id=METHODOLOGY_ID, code="STARTUP_VKR")
     methodology.name = "ВКР как стартап"
-    methodology.version = "1.0"
-    methodology.description = "Методология проверки ВКР как проектного обоснования стартапа по документам Анти-Дюринг."
+    methodology.version = METHODOLOGY_VERSION
+    methodology.description = "Методология проверки ВКР как проектного обоснования стартапа по Анти-Дюринг: method 1.26, implementation 1.10."
     methodology.is_active = True
     methodology.is_demo = False
     methodology.source = SOURCE

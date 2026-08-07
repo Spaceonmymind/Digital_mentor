@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import re
 from decimal import Decimal
 from typing import Literal
 
@@ -108,12 +111,132 @@ class FinalExpertOutput(BaseModel):
             raise ValueError("overall_score must be between 0 and 100")
         return value
 
-    @field_validator("confidence")
+
+class ReportHeader(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    work_title: str = Field(..., min_length=1)
+    work_type: str = Field(..., min_length=1)
+    analysis_date: str = Field(..., min_length=1)
+    work_version: str | None
+    methodology: str = Field(..., min_length=1)
+    current_stage: str = Field(..., pattern=r"^S[0-9]$")
+
+
+class VetoBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_active: bool
+    reason: str | None
+    why_further_assessment_is_meaningless: str | None
+    how_to_remove: str | None
+
+    @model_validator(mode="after")
+    def validate_active_veto(self):
+        if self.is_active:
+            for field_name in ("reason", "why_further_assessment_is_meaningless", "how_to_remove"):
+                value = getattr(self, field_name)
+                if not value or not value.strip():
+                    raise ValueError("active veto requires reason, why_further_assessment_is_meaningless and how_to_remove")
+        return self
+
+
+class Objection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(..., min_length=1)
+    what_does_not_work: str = Field(..., min_length=1)
+    why: str = Field(..., min_length=1)
+    where_to_move: str = Field(..., min_length=1)
+
+
+class SingleQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str = Field(..., min_length=1)
+
+
+class SingleNextStep(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    step: str = Field(..., min_length=1)
+    check_result: str = Field(..., min_length=1)
+
+
+class StageAssessment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    stage_code: str = Field(..., pattern=r"^S[0-9]$")
+    title: str = Field(..., min_length=1)
+    score: int
+    completed: str = Field(..., min_length=1)
+    next_level_requirement: str = Field(..., min_length=1)
+
+    @field_validator("score")
     @classmethod
-    def validate_confidence(cls, value: float) -> float:
-        if value < 0 or value > 1:
-            raise ValueError("confidence must be between 0 and 1")
+    def validate_stage_score(cls, value: int) -> int:
+        if value < 0 or value > 5:
+            raise ValueError("stage score must be between 0 and 5")
         return value
+
+
+class MentorBlock(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    leading_blind_spot: str = Field(..., min_length=1)
+    what_changed: str = Field(..., min_length=1)
+    what_remains_unresolved: str = Field(..., min_length=1)
+    mentor_question: str = Field(..., min_length=1)
+    recommended_intervention: str = Field(..., min_length=1)
+
+
+class MentorReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    header: ReportHeader
+    what_this_work_is: str = Field(..., min_length=1)
+    veto: VetoBlock
+    what_survived: list[str]
+    objections: list[Objection]
+    one_question: SingleQuestion
+    one_next_step: SingleNextStep
+    stage_assessments: list[StageAssessment]
+    mentor_block: MentorBlock
+    spoken_summary: str = Field(..., min_length=1, max_length=1200)
+
+    @model_validator(mode="after")
+    def validate_p112(self):
+        if not self.what_survived:
+            raise ValueError("what_survived is required")
+        if len(self.objections) > 5:
+            raise ValueError("objections must contain no more than 5 items")
+        if not self.stage_assessments:
+            raise ValueError("stage_assessments is required")
+        text = self.model_dump_json()
+        normalized = text.lower()
+        forbidden = [
+            "quote_not_found",
+            "worker",
+            "critic",
+            "llmcall",
+            "assessment id",
+            "mockanalysisengine",
+            "tokens",
+            "cost",
+            "provider",
+            "uuid",
+            "токен",
+            "стоимост",
+            "провайдер",
+            "идентификатор assessment",
+        ]
+        if any(value in normalized for value in forbidden):
+            raise ValueError("user-facing report contains internal terms")
+        if re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text, re.IGNORECASE):
+            raise ValueError("user-facing report contains UUID")
+        if re.search(r"\bA-\d{2}\b", text):
+            raise ValueError("user-facing report contains internal agent code")
+        return self
 
 
 class TaskRunResponse(BaseModel):
@@ -199,6 +322,25 @@ class MentorCriterionResult(BaseModel):
     provenance: list[MentorAgentTraceItem]
 
 
+class TechnicalAssessmentResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assessment_id: str
+    document_id: str
+    methodology_code: str
+    methodology_version: str
+    anti_during_method_version: str
+    anti_during_implementation_version: str
+    agent_trace: list[MentorAgentTraceItem]
+    worker_results: list[dict]
+    critic_results: list[dict]
+    final_result: dict
+    evidence_diagnostics: list[dict]
+    total_tokens: int
+    total_cost_rub: Decimal | None = None
+    processing_time_ms: int
+
+
 class MentorAnalysisResultPayload(BaseModel):
     assessment_id: str
     document_id: str
@@ -218,3 +360,6 @@ class MentorAnalysisResultPayload(BaseModel):
     total_cost_rub: Decimal | None = None
     processing_time_ms: int
     limitations: list[str]
+    report: MentorReport | None = None
+    technical: TechnicalAssessmentResult | None = None
+    spoken_summary: str | None = None

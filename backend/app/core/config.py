@@ -45,6 +45,7 @@ class Settings:
     ai_worker_seed: int | None = int(os.getenv("AI_WORKER_SEED", "42")) if os.getenv("AI_WORKER_SEED", "42") else None
     ai_execution_stop_on_error: bool = _bool_env("AI_EXECUTION_STOP_ON_ERROR", True)
     ai_demo_auto_approve_gates: bool = _bool_env("AI_DEMO_AUTO_APPROVE_GATES", True)
+    mentor_block_visible_to_student: bool = _bool_env("MENTOR_BLOCK_VISIBLE_TO_STUDENT", False)
     ai_assessment_max_cost_rub: float = float(os.getenv("AI_ASSESSMENT_MAX_COST_RUB", "100"))
     ai_max_worker_calls: int = int(os.getenv("AI_MAX_WORKER_CALLS", "100"))
     ai_max_critic_calls: int = int(os.getenv("AI_MAX_CRITIC_CALLS", "30"))

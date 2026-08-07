@@ -39,6 +39,10 @@ class ReportService:
         )
 
     def _build_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
+        mentor_report = (payload.get("extra_blocks") or {}).get("mentor_report")
+        if mentor_report:
+            return self._build_mentor_report_lines(document, mentor_report)
+
         lines = [
             "Цифровой ментор. Итоговый отчет",
             f"Файл: {document.original_name}",
@@ -91,6 +95,74 @@ class ReportService:
             lines.append("Отметка: отчет сформирован в демонстрационном режиме MockAnalysisEngine.")
         return lines
 
+    def _build_mentor_report_lines(self, document: Document, report: dict) -> list[str]:
+        header = report.get("header") or {}
+        veto = report.get("veto") or {}
+        question = report.get("one_question") or {}
+        next_step = report.get("one_next_step") or {}
+        lines = [
+            "ЦИФРОВОЙ МЕНТОР",
+            "Разбор работы",
+            "",
+            f"Работа: {header.get('work_title') or document.original_name}",
+            f"Тип: {header.get('work_type') or 'ВКР как стартап'}",
+            f"Дата: {header.get('analysis_date') or ''}",
+            f"Версия работы: {header.get('work_version') or 'не указана'}",
+            f"Методология: {header.get('methodology') or ''}",
+            f"Текущая стадия работы: {header.get('current_stage') or ''}",
+            "",
+            "1. Что это за работа:",
+            report.get("what_this_work_is") or "",
+            "",
+        ]
+        if veto.get("is_active"):
+            lines.extend(
+                [
+                    "2. Вето:",
+                    "ВЕТО",
+                    f"Причина: {veto.get('reason') or ''}",
+                    f"Почему дальнейшее оценивание сейчас бессмысленно: {veto.get('why_further_assessment_is_meaningless') or ''}",
+                    f"Что необходимо сделать, чтобы снять вето: {veto.get('how_to_remove') or ''}",
+                    "",
+                ]
+            )
+
+        lines.extend(["3. Что устояло:"])
+        lines.extend(f"- {item}" for item in report.get("what_survived", []))
+        lines.extend(["", "4. Главные возражения:"])
+        for item in report.get("objections", []):
+            lines.extend(
+                [
+                    f"- {item.get('title')}",
+                    f"  Что не работает: {item.get('what_does_not_work')}",
+                    f"  Почему: {item.get('why')}",
+                    f"  Куда двигаться: {item.get('where_to_move')}",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "5. Один вопрос:",
+                question.get("question") or "",
+                "",
+                "6. Следующий шаг:",
+                next_step.get("step") or "",
+                f"Как проверить результат: {next_step.get('check_result') or ''}",
+                "",
+                "7. Путь работы по стадиям:",
+            ]
+        )
+        for item in report.get("stage_assessments", []):
+            lines.extend(
+                [
+                    f"- {item.get('stage_code')} {item.get('title')} — {item.get('score')}/5",
+                    f"  Что выполнено: {item.get('completed')}",
+                    f"  До следующего уровня: {item.get('next_level_requirement')}",
+                ]
+            )
+        lines.extend(["", "Отметка об использовании AI: разбор сформирован цифровым ментором и требует человеческой проверки."])
+        return lines
+
     def _render_pdf(self, lines: list[str]) -> bytes:
         doc = fitz.open()
         regular_font = fitz.Font(fontfile=str(self.font_regular))
@@ -98,7 +170,7 @@ class ReportService:
         y = self.margin
 
         for raw_line in lines:
-            is_title = raw_line == "Цифровой ментор. Итоговый отчет"
+            is_title = raw_line in {"Цифровой ментор. Итоговый отчет", "ЦИФРОВОЙ МЕНТОР"}
             is_section = raw_line.endswith(":") and not raw_line.startswith("-")
             fontname = "GolosBold" if is_title or is_section else "Golos"
             fontsize = 18 if is_title else 13 if is_section else 11
