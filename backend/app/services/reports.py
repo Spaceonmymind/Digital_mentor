@@ -42,6 +42,9 @@ class ReportService:
         mentor_report = (payload.get("extra_blocks") or {}).get("mentor_report")
         if mentor_report:
             return self._build_mentor_report_lines(document, mentor_report)
+        demo_report = (payload.get("extra_blocks") or {}).get("demo_report")
+        if demo_report:
+            return self._build_demo_report_lines(document, demo_report)
 
         lines = [
             "Цифровой ментор. Итоговый отчет",
@@ -161,6 +164,28 @@ class ReportService:
                 ]
             )
         lines.extend(["", "Отметка об использовании AI: разбор сформирован цифровым ментором и требует человеческой проверки."])
+        return lines
+
+    def _build_demo_report_lines(self, document: Document, report: dict) -> list[str]:
+        lines = [
+            "ЦИФРОВОЙ МЕНТОР",
+            "Demo-разбор работы",
+            "",
+            f"Работа: {document.original_name}",
+            f"Общий балл: {report.get('overall_score')} / 60",
+            "",
+            "Оценки по критериям:",
+        ]
+        for item in report.get("criteria", []):
+            lines.append(f"- {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
+        lines.extend(["", "3 сильные стороны:"])
+        lines.extend(f"- {item}" for item in report.get("strengths", []))
+        lines.extend(["", "3 замечания:"])
+        lines.extend(f"- {item}" for item in report.get("remarks", []))
+        lines.extend(["", "3 рекомендации:"])
+        lines.extend(f"- {item}" for item in report.get("recommendations", []))
+        lines.extend(["", "Итоговое заключение:", report.get("conclusion") or ""])
+        lines.extend(["", "Отметка: demo-режим использует сокращенный мультиагентный анализ и не заменяет полный expert-разбор."])
         return lines
 
     def _render_pdf(self, lines: list[str]) -> bytes:

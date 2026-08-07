@@ -25,6 +25,7 @@ export async function runAnalysis(documentId, onProgress) {
     analysis_type: "mentor",
     methodology_id: "mentor-default",
     methodology_version: "draft",
+    mode: window.__MENTOR_DEMO_MODE__ ? "demo" : "standard",
   });
 
   let status = await getAnalysis(created.analysis_id);

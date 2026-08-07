@@ -9,7 +9,7 @@ from app.assessment.models import IndicatorResult
 from app.db.models import Analysis, AnalysisResult, Document, LLMCall
 from app.db.session import async_session_factory
 from app.execution.models import AgentResult, AgentTaskRun, GateDecision, MentorAnalysisResult
-from app.execution.schemas import CriticOutput, MentorReport, WorkerIndicatorOutput
+from app.execution.schemas import CriticOutput, DemoAgentOutput, DemoFinalReport, MentorReport, WorkerIndicatorOutput
 from app.execution.startup_vkr import StartupVkrAgentFlow
 from app.llm.registry import CRITIC, FINAL_EXPERT, WORKER
 from app.llm.schemas import LLMResult, LLMUsage
@@ -160,6 +160,31 @@ class FakeStartupLLM:
                 recommended_adjustments=["Попросить автора подтвердить ключевые утверждения"],
                 confidence=0.8,
             )
+        elif response_model is DemoAgentOutput:
+            output = DemoAgentOutput(
+                summary="Demo-агент нашел ключевой вывод.",
+                strengths=["Есть предмет проверки"],
+                issues=["Нужно уточнить доказательства"],
+                recommendations=["Сжать аргументацию до проверяемой схемы"],
+                score=8,
+            )
+        elif response_model is DemoFinalReport:
+            output = DemoFinalReport(
+                overall_score=47,
+                criteria=[
+                    {"name": "Проблема", "score": 8, "comment": "Проблема показана достаточно ясно."},
+                    {"name": "Решение", "score": 8, "comment": "Решение понятно, но механизм нужно уточнить."},
+                    {"name": "Архитектура", "score": 7, "comment": "Архитектура намечена, отказные сценарии слабые."},
+                    {"name": "Экономика", "score": 8, "comment": "Экономика есть, нужны go/no-go пороги."},
+                    {"name": "Риски", "score": 7, "comment": "Риски названы, но митигация неполная."},
+                    {"name": "Инновационность", "score": 9, "comment": "Идея выглядит новой для выбранного контекста."},
+                ],
+                strengths=["Есть актуальная проблема", "Есть архитектурная идея", "Есть экономическое обоснование"],
+                remarks=["Не хватает отказных сценариев", "Не хватает go/no-go порогов", "Нужно уточнить доказательства"],
+                recommendations=["Описать fallback", "Добавить пороги решения", "Сжать механизм в схему"],
+                conclusion="Demo-разбор показывает сильную основу и несколько проверяемых направлений доработки.",
+                spoken_summary="Demo-анализ завершен: общий балл 47 из 60, главный следующий шаг — уточнить fallback и пороги.",
+            )
         else:
             output = self._mentor_report()
         return LLMResult(
@@ -294,6 +319,27 @@ async def test_startup_vkr_flow_cache_hit_does_not_call_llm_again():
         await StartupVkrAgentFlow(session, llm_client=llm).execute(pipeline.assessment_id, analysis_id="analysis-1")
 
     assert len(llm.calls) == 12
+
+
+@pytest.mark.asyncio
+async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_report():
+    document = await seed_document("Резюме проекта. Проблема KYC. Архитектура DID Wallet Verifier. Экономика SAM NPV. Риски отказов.")
+    llm = FakeStartupLLM()
+    async with async_session_factory() as session:
+        await ensure_startup_vkr_seed(session)
+        pipeline = await PipelineService(session).build(
+            PipelineBuildRequest(artifact_type="STARTUP_VKR", artifact_id=document.id, filename=document.original_name)
+        )
+        payload, metrics = await StartupVkrAgentFlow(session, llm_client=llm).execute_demo(pipeline.assessment_id, analysis_id="analysis-demo")
+
+    assert payload.overall_score == 47
+    assert payload.extra_blocks["mode"] == "demo"
+    assert payload.extra_blocks["demo_report"]["overall_score"] == 47
+    assert [call["model"] for call in llm.calls].count(CRITIC) == 4
+    assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
+    assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
+    assert metrics["mode"] == "demo"
+    assert metrics["agent_time_a15"] >= 0
 
 
 def test_mentor_report_rejects_internal_terms_and_invalid_stage_score():

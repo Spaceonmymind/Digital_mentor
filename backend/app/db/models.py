@@ -33,6 +33,7 @@ class Analysis(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     document_id: Mapped[str] = mapped_column(String(36), ForeignKey("documents.id"), nullable=False)
     analysis_type: Mapped[str] = mapped_column(String(64), nullable=False, default="mentor")
+    mode: Mapped[str] = mapped_column(String(32), nullable=False, default="standard")
     methodology_id: Mapped[str] = mapped_column(String(128), nullable=False)
     methodology_version: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(64), nullable=False, default="queued")

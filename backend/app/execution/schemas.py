@@ -345,6 +345,43 @@ class TechnicalAssessmentResult(BaseModel):
     processing_time_ms: int
 
 
+class DemoAgentOutput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = Field(..., min_length=1, max_length=500)
+    strengths: list[str] = Field(..., max_length=3)
+    issues: list[str] = Field(..., max_length=3)
+    recommendations: list[str] = Field(..., max_length=3)
+    score: int = Field(..., ge=0, le=10)
+
+
+class DemoCriterionScore(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Literal["Проблема", "Решение", "Архитектура", "Экономика", "Риски", "Инновационность"]
+    score: int = Field(..., ge=0, le=10)
+    comment: str = Field(..., min_length=1, max_length=500)
+
+
+class DemoFinalReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    overall_score: int = Field(..., ge=0, le=60)
+    criteria: list[DemoCriterionScore] = Field(..., min_length=6, max_length=6)
+    strengths: list[str] = Field(..., min_length=3, max_length=3)
+    remarks: list[str] = Field(..., min_length=3, max_length=3)
+    recommendations: list[str] = Field(..., min_length=3, max_length=3)
+    conclusion: str = Field(..., min_length=1, max_length=500)
+    spoken_summary: str = Field(..., min_length=1, max_length=700)
+
+    @model_validator(mode="after")
+    def validate_score_sum(self):
+        total = sum(item.score for item in self.criteria)
+        if self.overall_score != total:
+            raise ValueError("overall_score must equal sum of criteria scores")
+        return self
+
+
 class MentorAnalysisResultPayload(BaseModel):
     assessment_id: str
     document_id: str

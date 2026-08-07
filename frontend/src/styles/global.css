@@ -3399,6 +3399,25 @@ body.is-modal-open {
   min-width: 0;
 }
 
+.criteria-card,
+.list-card,
+.document-review,
+.ai-risk-card,
+.recommendation-section {
+  max-height: 420px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+
+.criterion small,
+.list-card li,
+.ai-risk-card li,
+.remark-card p,
+.recommendation-card p {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
 /* Header/content separation */
 .topbar {
   margin-bottom: clamp(22px, 2.2vw, 36px);

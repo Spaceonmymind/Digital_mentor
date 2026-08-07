@@ -10,5 +10,6 @@ class AnalysisEngine(Protocol):
         document_id: str,
         methodology_id: str,
         methodology_version: str,
+        mode: str = "standard",
     ) -> AnalysisResultPayload:
         ...

@@ -23,6 +23,7 @@ class AssessmentWorkerAnalysisEngine:
         document_id: str,
         methodology_id: str,
         methodology_version: str,
+        mode: str = "standard",
     ) -> AnalysisResultPayload:
         async with async_session_factory() as session:
             analysis = await session.get(Analysis, analysis_id)

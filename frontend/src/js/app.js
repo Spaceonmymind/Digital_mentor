@@ -412,17 +412,17 @@ function renderResults(result) {
       ({ title, score, explanation }) => `
         <div class="criterion">
           <span>${title}<small>${explanation || getScoreLevel(score)}</small></span>
-          <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : score}%"></span></div>
-          <strong>${normalized.isMentorReport ? `${score}/5` : `${score}% · ${getScoreLevel(score)}`}</strong>
+          <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : normalized.isDemoReport ? Math.round((score / 10) * 100) : score}%"></span></div>
+          <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}% · ${getScoreLevel(score)}`}</strong>
         </div>
       `,
     )
     .join("");
 
-  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : "Итоговая оценка";
-  document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : `${normalized.overall_score} / 100`;
+  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Demo-оценка" : "Итоговая оценка";
+  document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score} / 60` : `${normalized.overall_score} / 100`;
   document.querySelector(".score-card > div span").textContent = normalized.verdict;
-  document.querySelector(".score-ring").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.overall_score;
+  document.querySelector(".score-ring").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score}/60` : normalized.overall_score;
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
@@ -444,6 +444,10 @@ function normalizeResult(result) {
   if (mentorReport) {
     return normalizeMentorReportResult(result, mentorReport);
   }
+  const demoReport = extraBlocks.demo_report || null;
+  if (demoReport) {
+    return normalizeDemoReportResult(result, demoReport);
+  }
   const aiRisk = result.ai_risk || { factors: result.aiRiskFactors || [] };
 
   return {
@@ -462,6 +466,50 @@ function normalizeResult(result) {
     aiRisk,
     recommendations: result.recommendations || recommendationPlan,
     isMentorReport: false,
+    isDemoReport: false,
+  };
+}
+
+function normalizeDemoReportResult(result, report) {
+  return {
+    analysis_id: result.analysis_id || state.analysisId,
+    overall_score: report.overall_score,
+    currentStage: null,
+    verdict: report.conclusion,
+    criteria: (report.criteria || []).map((item, index) => ({
+      code: String(index + 1),
+      title: item.name,
+      score: item.score,
+      max_score: 10,
+      explanation: item.comment,
+    })),
+    strengths: report.strengths || [],
+    improvements: report.remarks || [],
+    remarks: (report.remarks || []).map((item, index) => ({
+      title: item,
+      quote: "",
+      comment: item,
+      recommendation: (report.recommendations || [])[index] || "Уточнить этот пункт.",
+      severity: "medium",
+    })),
+    aiRisk: {
+      level: "demo",
+      factors: [
+        "Demo-режим: короткий мультиагентный анализ",
+        "Контекст сокращен до смысловых блоков",
+        "Для защиты результата используйте standard/expert режим",
+      ],
+      disclaimer: "Demo-отчет предназначен для быстрой демонстрации и не заменяет полный expert-анализ.",
+    },
+    recommendations: (report.recommendations || []).map((item, index) => ({
+      priority: String(index + 1),
+      title: item,
+      effect: "Улучшит демонстрационную оценку",
+      complexity: "Средняя",
+    })),
+    spokenSummary: report.spoken_summary || report.conclusion,
+    isMentorReport: false,
+    isDemoReport: true,
   };
 }
 
@@ -530,7 +578,7 @@ function getScoreLevel(score) {
 function renderSummary(result) {
   elements.summaryScore.textContent = result.isMentorReport ? result.currentStage : result.overall_score;
   const summaryScoreCaption = document.querySelector(".summary-score span");
-  if (summaryScoreCaption) summaryScoreCaption.textContent = result.isMentorReport ? "текущая стадия" : "из 100";
+  if (summaryScoreCaption) summaryScoreCaption.textContent = result.isMentorReport ? "текущая стадия" : result.isDemoReport ? "из 60" : "из 100";
   elements.summaryVerdict.textContent = result.spokenSummary || result.verdict;
   renderList(elements.summaryStrengths, result.strengths.slice(0, 3));
   renderList(elements.summaryImprovements, result.improvements.slice(0, 3));
@@ -858,11 +906,13 @@ async function loadPublicConfig() {
   try {
     const config = await getPublicConfig();
     state.publicConfig = config;
+    window.__MENTOR_DEMO_MODE__ = Boolean(config.demo_mode);
     configureSpeechService(config.tts_mode);
     document.body.classList.toggle("is-presentation-mode", Boolean(config.presentation_mode));
     elements.demoDocumentButton.hidden = !(config.demo_mode || FRONTEND_MOCK_MODE);
     elements.modeBanner.hidden = !(config.frontend_mock_mode || FRONTEND_MOCK_MODE);
   } catch (error) {
+    window.__MENTOR_DEMO_MODE__ = false;
     configureSpeechService("browser");
     elements.modeBanner.hidden = !FRONTEND_MOCK_MODE;
     elements.demoDocumentButton.hidden = !FRONTEND_MOCK_MODE;

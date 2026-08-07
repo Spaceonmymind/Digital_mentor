@@ -39,8 +39,9 @@ class MockAnalysisEngine:
         document_id: str,
         methodology_id: str,
         methodology_version: str,
+        mode: str = "standard",
     ) -> AnalysisResultPayload:
-        logger.info("analysis_started analysis_id=%s document_id=%s", analysis_id, document_id)
+        logger.info("analysis_started analysis_id=%s document_id=%s mode=%s", analysis_id, document_id, mode)
         async with async_session_factory() as session:
             analysis = await session.get(Analysis, analysis_id)
             if analysis is None:

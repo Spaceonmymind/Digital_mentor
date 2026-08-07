@@ -36,6 +36,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), primary_key=True),
         sa.Column("document_id", sa.String(length=36), sa.ForeignKey("documents.id"), nullable=False),
         sa.Column("analysis_type", sa.String(length=64), nullable=False),
+        sa.Column("mode", sa.String(length=32), nullable=False, server_default="standard"),
         sa.Column("methodology_id", sa.String(length=128), nullable=False),
         sa.Column("methodology_version", sa.String(length=128), nullable=False),
         sa.Column("status", sa.String(length=64), nullable=False),

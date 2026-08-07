@@ -18,10 +18,11 @@ async def run_analysis_task(analysis_id: str) -> None:
         document_id = analysis.document_id
         methodology_id = analysis.methodology_id
         methodology_version = analysis.methodology_version
+        mode = analysis.mode
 
     try:
         engine = get_analysis_engine()
-        await engine.run(analysis_id, document_id, methodology_id, methodology_version)
+        await engine.run(analysis_id, document_id, methodology_id, methodology_version, mode=mode)
     except Exception as exc:
         logger.exception("analysis_failed analysis_id=%s", analysis_id)
         async with async_session_factory() as session:

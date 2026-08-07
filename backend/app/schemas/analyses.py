@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 AnalysisStatus = Literal["queued", "processing", "completed", "failed", "cancelled"]
+AnalysisMode = Literal["demo", "standard", "expert"]
 
 
 class AnalysisCreateRequest(BaseModel):
@@ -12,6 +13,7 @@ class AnalysisCreateRequest(BaseModel):
     analysis_type: Literal["mentor"] = "mentor"
     methodology_id: str = Field(default="mentor-default", min_length=1, max_length=100)
     methodology_version: str = Field(default="draft", min_length=1, max_length=100)
+    mode: AnalysisMode = "standard"
 
 
 class AnalysisCreateResponse(BaseModel):
@@ -28,6 +30,7 @@ class AnalysisStatusResponse(BaseModel):
     current_step: str | None
     message: str | None = None
     error_message: str | None = None
+    mode: AnalysisMode = "standard"
 
 
 class AnalysisEventResponse(BaseModel):

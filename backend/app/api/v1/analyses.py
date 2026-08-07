@@ -42,6 +42,7 @@ def _status_response(analysis: Analysis, message: str | None = None) -> Analysis
         current_step=analysis.current_step,
         message=message,
         error_message=analysis.error_message,
+        mode=analysis.mode,
     )
 
 
@@ -60,6 +61,7 @@ async def create_analysis(
     analysis = Analysis(
         document_id=payload.document_id,
         analysis_type=payload.analysis_type,
+        mode=payload.mode,
         methodology_id=payload.methodology_id,
         methodology_version=payload.methodology_version,
         status="queued",
