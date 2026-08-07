@@ -348,14 +348,19 @@ class TechnicalAssessmentResult(BaseModel):
 class DemoAgentOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    summary: str = Field(..., min_length=1, max_length=500)
+    summary: str
     strengths: list[str]
     issues: list[str]
     recommendations: list[str]
-    score: int = Field(..., ge=0, le=10)
+    score: int
 
     @model_validator(mode="after")
     def limit_demo_lists(self):
+        if not self.summary.strip():
+            raise ValueError("summary is required")
+        if self.score < 0 or self.score > 10:
+            raise ValueError("demo score must be between 0 and 10")
+        self.summary = self.summary[:500]
         self.strengths = self.strengths[:3]
         self.issues = self.issues[:3]
         self.recommendations = self.recommendations[:3]
@@ -366,28 +371,45 @@ class DemoCriterionScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Literal["Проблема", "Решение", "Архитектура", "Экономика", "Риски", "Инновационность"]
-    score: int = Field(..., ge=0, le=10)
-    comment: str = Field(..., min_length=1, max_length=500)
+    score: int
+    comment: str
+
+    @model_validator(mode="after")
+    def validate_demo_criterion(self):
+        if self.score < 0 or self.score > 10:
+            raise ValueError("demo criterion score must be between 0 and 10")
+        if not self.comment.strip():
+            raise ValueError("demo criterion comment is required")
+        self.comment = self.comment[:500]
+        return self
 
 
 class DemoFinalReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    overall_score: int = Field(..., ge=0, le=60)
+    overall_score: int
     criteria: list[DemoCriterionScore]
     strengths: list[str]
     remarks: list[str]
     recommendations: list[str]
-    conclusion: str = Field(..., min_length=1, max_length=500)
-    spoken_summary: str = Field(..., min_length=1, max_length=700)
+    conclusion: str
+    spoken_summary: str
 
     @model_validator(mode="after")
     def validate_score_sum(self):
+        if self.overall_score < 0 or self.overall_score > 60:
+            raise ValueError("demo overall score must be between 0 and 60")
         if len(self.criteria) != 6:
             raise ValueError("demo final report requires exactly 6 criteria")
+        if not self.conclusion.strip():
+            raise ValueError("demo conclusion is required")
+        if not self.spoken_summary.strip():
+            raise ValueError("demo spoken_summary is required")
         self.strengths = self.strengths[:3]
         self.remarks = self.remarks[:3]
         self.recommendations = self.recommendations[:3]
+        self.conclusion = self.conclusion[:500]
+        self.spoken_summary = self.spoken_summary[:700]
         total = sum(item.score for item in self.criteria)
         if self.overall_score != total:
             raise ValueError("overall_score must equal sum of criteria scores")

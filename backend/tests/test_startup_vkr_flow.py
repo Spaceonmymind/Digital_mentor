@@ -404,8 +404,8 @@ def test_demo_schemas_do_not_emit_unsupported_array_size_keywords():
 
     schema_text = f"{agent_schema}{final_schema}"
 
-    assert "maxItems" not in schema_text
-    assert "minItems" not in schema_text
+    for keyword in ("maxItems", "minItems", "maximum", "minimum", "maxLength", "minLength"):
+        assert keyword not in schema_text
 
 
 def test_student_pdf_uses_mentor_report_without_technical_dump():
