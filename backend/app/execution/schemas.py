@@ -214,23 +214,27 @@ class MentorReport(BaseModel):
             raise ValueError("stage_assessments is required")
         text = self.model_dump_json()
         normalized = text.lower()
-        forbidden = [
+        forbidden_substrings = [
             "quote_not_found",
-            "worker",
-            "critic",
             "llmcall",
             "assessment id",
             "mockanalysisengine",
-            "tokens",
-            "cost",
-            "provider",
             "uuid",
-            "токен",
-            "стоимост",
-            "провайдер",
             "идентификатор assessment",
         ]
-        if any(value in normalized for value in forbidden):
+        forbidden_patterns = [
+            r"\bworker\b",
+            r"\bcritic\b",
+            r"\bprovider\b",
+            r"\btokens\b",
+            r"\bcost\b",
+            r"\btotal_tokens\b",
+            r"\btotal_cost_rub\b",
+            r"\bllm\b",
+        ]
+        if any(value in normalized for value in forbidden_substrings):
+            raise ValueError("user-facing report contains internal terms")
+        if any(re.search(pattern, normalized) for pattern in forbidden_patterns):
             raise ValueError("user-facing report contains internal terms")
         if re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", text, re.IGNORECASE):
             raise ValueError("user-facing report contains UUID")

@@ -338,6 +338,9 @@ def test_mentor_report_rejects_internal_terms_and_invalid_stage_score():
         "spoken_summary": "Я закончил разбор. Главное противоречие связано с механизмом. Следующий шаг — построить схему.",
     }
     MentorReport.model_validate(valid)
+    domain_text = dict(valid)
+    domain_text["what_this_work_is"] = "Работа обсуждает токены доступа, стоимость внедрения и экономические издержки как предмет анализа."
+    MentorReport.model_validate(domain_text)
     invalid = dict(valid)
     invalid["what_this_work_is"] = "Worker сообщил Assessment ID 12345678-1234-1234-1234-123456789abc."
     with pytest.raises(ValueError):
