@@ -1,7 +1,90 @@
 services:
-  digital-mentor:
-    build: .
-    container_name: digital-mentor
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: digital-mentor-frontend
     ports:
       - "8080:80"
+    depends_on:
+      backend:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health/live >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: digital-mentor-backend
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DEMO_MODE: ${DEMO_MODE:-true}
+      PRESENTATION_MODE: ${PRESENTATION_MODE:-false}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://digital_mentor:change_me@db:5432/digital_mentor}
+      STORAGE_PATH: ${STORAGE_PATH:-/app/storage}
+      MAX_UPLOAD_SIZE_MB: ${MAX_UPLOAD_SIZE_MB:-50}
+      ALLOWED_FILE_TYPES: ${ALLOWED_FILE_TYPES:-.pdf,.docx}
+      MOCK_ANALYSIS_ENABLED: ${MOCK_ANALYSIS_ENABLED:-true}
+      MOCK_ANALYSIS_STEP_DELAY: ${MOCK_ANALYSIS_STEP_DELAY:-1.5}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      FRONTEND_MOCK_MODE: ${FRONTEND_MOCK_MODE:-false}
+      TTS_MODE: ${TTS_MODE:-browser}
+      TTS_MAX_TEXT_LENGTH: ${TTS_MAX_TEXT_LENGTH:-700}
+      DOCUMENT_RETENTION_HOURS: ${DOCUMENT_RETENTION_HOURS:-24}
+      AUDIO_RETENTION_MINUTES: ${AUDIO_RETENTION_MINUTES:-60}
+      REPORT_RETENTION_HOURS: ${REPORT_RETENTION_HOURS:-24}
+      POLZA_API_KEY: ${POLZA_API_KEY:-}
+      POLZA_BASE_URL: ${POLZA_BASE_URL:-https://polza.ai/api/v1}
+      LLM_REQUEST_TIMEOUT_SECONDS: ${LLM_REQUEST_TIMEOUT_SECONDS:-60}
+      ANALYSIS_ENGINE: ${ANALYSIS_ENGINE:-mock}
+      AI_DOCUMENT_MAX_CHARS: ${AI_DOCUMENT_MAX_CHARS:-60000}
+      AI_DOCUMENT_EXCERPT_STRATEGY: ${AI_DOCUMENT_EXCERPT_STRATEGY:-head_tail}
+      AI_WORKER_TEMPERATURE: ${AI_WORKER_TEMPERATURE:-0}
+      AI_WORKER_MAX_COMPLETION_TOKENS: ${AI_WORKER_MAX_COMPLETION_TOKENS:-2000}
+      AI_WORKER_SEED: ${AI_WORKER_SEED:-42}
+      AI_CRITIC_TEMPERATURE: ${AI_CRITIC_TEMPERATURE:-0}
+      AI_CRITIC_MAX_COMPLETION_TOKENS: ${AI_CRITIC_MAX_COMPLETION_TOKENS:-4000}
+      AI_FINAL_EXPERT_TEMPERATURE: ${AI_FINAL_EXPERT_TEMPERATURE:-0}
+      AI_FINAL_EXPERT_MAX_COMPLETION_TOKENS: ${AI_FINAL_EXPERT_MAX_COMPLETION_TOKENS:-3000}
+      AI_EXECUTION_STOP_ON_ERROR: ${AI_EXECUTION_STOP_ON_ERROR:-true}
+      AI_DEMO_AUTO_APPROVE_GATES: ${AI_DEMO_AUTO_APPROVE_GATES:-true}
+      MENTOR_BLOCK_VISIBLE_TO_STUDENT: ${MENTOR_BLOCK_VISIBLE_TO_STUDENT:-false}
+      AI_ASSESSMENT_MAX_COST_RUB: ${AI_ASSESSMENT_MAX_COST_RUB:-100}
+      AI_MAX_WORKER_CALLS: ${AI_MAX_WORKER_CALLS:-100}
+      AI_MAX_CRITIC_CALLS: ${AI_MAX_CRITIC_CALLS:-30}
+      AI_MAX_FINAL_EXPERT_CALLS: ${AI_MAX_FINAL_EXPERT_CALLS:-1}
+    volumes:
+      - ./storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: digital-mentor-db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-digital_mentor}
+      POSTGRES_USER: ${POSTGRES_USER:-digital_mentor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-digital_mentor} -d ${POSTGRES_DB:-digital_mentor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

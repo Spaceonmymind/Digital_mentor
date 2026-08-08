@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Цифровой ментор</title>
+    <link rel="stylesheet" href="./src/styles/variables.css" />
+    <link rel="stylesheet" href="./src/styles/global.css" />
+  </head>
+  <body>
+    <div class="app-shell is-sidebar-collapsed" id="appShell">
+      <aside class="sidebar" aria-label="Основная навигация">
+        <div class="sidebar__brand">
+          <div class="sidebar__mark">ЦМ</div>
+          <div class="sidebar__brand-text">
+            <strong>Цифровой ментор</strong>
+            <span>Demo</span>
+          </div>
+          <button class="icon-button sidebar__toggle" type="button" id="sidebarToggle" aria-label="Раскрыть меню" aria-expanded="false">
+            <span data-icon="panel-left"></span>
+          </button>
+        </div>
+
+        <nav class="sidebar__nav">
+          <button class="nav-item is-active" type="button" data-section="mentor">
+            <span data-icon="user-check"></span>
+            <span class="nav-item__label">Цифровой ментор</span>
+          </button>
+          <button class="nav-item" type="button" data-section="about">
+            <span data-icon="info"></span>
+            <span class="nav-item__label">О проекте</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="brand-lockup">
+            <div class="brand-logo-card">
+              <img class="brand-logo-card__university" src="./src/assets/logos/financial-university-brand.png" alt="Финансовый университет" onerror="this.onerror=null;this.src='./src/assets/logos/financila_univer.png';" />
+            </div>
+            <div class="brand-divider"></div>
+            <div class="project-title">
+              <h1>Цифровой ментор</h1>
+              <p>Интеллектуальный анализ учебных и проектных работ</p>
+            </div>
+          </div>
+
+          <div class="topbar__actions">
+            <div class="partner-badge" aria-label="Партнер проекта">
+              <img src="./src/assets/logos/Mir-logo.png" alt="МИР" onerror="this.onerror=null;this.src='./src/assets/logos/mir-logo.svg';" />
+            </div>
+            <button class="button button--secondary" type="button" id="fullscreenButton">
+              <span data-icon="maximize"></span>
+              Режим презентации
+            </button>
+            <button class="icon-button" type="button" id="soundToggle" aria-label="Переключить звук">
+              <span data-icon="volume2"></span>
+            </button>
+            <button class="button button--secondary" type="button" id="resetButton">
+              <span data-icon="refresh-cw"></span>
+              Новая проверка
+            </button>
+          </div>
+        </header>
+        <div class="mode-banner" id="modeBanner" hidden></div>
+
+        <section class="page is-visible" id="mentorPage">
+          <div class="mentor-layout">
+            <section class="card avatar-card">
+              <div class="avatar-stage" id="avatarStage">
+                <div class="avatar-orbit"></div>
+                <img class="mascot-image" src="./src/assets/mascot/finik-kosmonavt.png" alt="Маскот Финансового университета Финик" />
+                <div class="voice-wave" aria-hidden="true">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+
+              <div class="avatar-card__body">
+                <div>
+                  <h2>Финик</h2>
+                  <p class="mentor-status" id="mentorStatus">Ожидает документ</p>
+                </div>
+                <p class="mentor-message" id="mentorMessage">Загрузите работу, и я проведу комплексный анализ.</p>
+                <button class="button button--ghost" type="button" id="avatarSoundButton">
+                  <span data-icon="volume2"></span>
+                  Озвучивание включено
+                </button>
+              </div>
+            </section>
+
+            <section class="workspace">
+              <div class="workspace-stage is-visible" id="welcomeStage">
+                <section class="card welcome-card">
+                  <div class="welcome-card__content">
+                    <div class="brand-logo-card welcome-card__logo">
+                      <img class="brand-logo-card__university" src="./src/assets/logos/financial-university-brand.png" alt="Финансовый университет" onerror="this.onerror=null;this.src='./src/assets/logos/financila_univer.png';" />
+                    </div>
+                    <div class="partner-badge welcome-card__partner" aria-label="Партнер проекта">
+                      <img src="./src/assets/logos/Mir-logo.png" alt="МИР" onerror="this.onerror=null;this.src='./src/assets/logos/mir-logo.svg';" />
+                    </div>
+                    <p class="eyebrow">Финансовый университет</p>
+                    <h2>Цифровой ментор</h2>
+                    <p>Интеллектуальный анализ учебных и проектных работ</p>
+                    <div class="welcome-stats" aria-label="Возможности цифрового ментора">
+                      <div><span data-icon="file-text"></span><strong>Загрузка</strong></div>
+                      <div><span data-icon="activity"></span><strong>Анализ</strong></div>
+                      <div><span data-icon="download"></span><strong>Отчет</strong></div>
+                    </div>
+                    <div class="welcome-card__actions">
+                      <button class="button button--large" type="button" id="startDemoButton">
+                        <span data-icon="play"></span>
+                        Начать работу
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="uploadStage">
+                <section class="card upload-card" id="dropZone">
+                  <div class="section-heading">
+                    <span data-icon="file-up"></span>
+                    <div>
+                      <h2>Загрузите работу для анализа</h2>
+                    </div>
+                  </div>
+
+                  <div class="drop-area">
+                    <input id="fileInput" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                    <div class="drop-area__icon"><span data-icon="upload-cloud"></span></div>
+                    <h3>Перетащите файл сюда</h3>
+                    <button class="button" type="button" id="chooseFileButton">Выбрать файл</button>
+                    <button class="button button--ghost demo-document-button" type="button" id="demoDocumentButton" hidden>
+                      <span data-icon="file-check-2"></span>
+                      Использовать пример работы
+                    </button>
+                  </div>
+
+                  <div class="file-preview" id="filePreview" hidden>
+                    <div class="file-preview__icon"><span data-icon="file-text"></span></div>
+                    <div>
+                      <strong id="fileName">document.pdf</strong>
+                      <span id="fileMeta">PDF · 1.2 МБ</span>
+                    </div>
+                    <button class="icon-button" type="button" id="removeFileButton" aria-label="Удалить файл">
+                      <span data-icon="trash-2"></span>
+                    </button>
+                  </div>
+
+                  <div class="upload-card__actions">
+                    <div class="analysis-scope">
+                      <span>Структура</span>
+                      <span>Содержание</span>
+                      <span>Аргументация</span>
+                      <span>Логика</span>
+                      <span>AI-risk</span>
+                      <span>Рекомендации</span>
+                    </div>
+                    <button class="button button--large" type="button" id="startAnalysisButton" disabled>
+                      <span data-icon="play"></span>
+                      Начать анализ
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="processingStage">
+                <section class="card">
+                  <div class="section-heading">
+                    <span data-icon="scan-search"></span>
+                    <div>
+                      <h2>Идет анализ работы</h2>
+                      <p>Ментор последовательно проверяет структуру, содержание, стиль и признаки генеративного ИИ.</p>
+                    </div>
+                  </div>
+                  <div class="analysis-headline">
+                    <div>
+                      <span>Документ</span>
+                      <strong id="processingFileName">Работа</strong>
+                    </div>
+                    <div>
+                      <span>Общий прогресс</span>
+                      <strong id="processingPercent">0%</strong>
+                    </div>
+                    <button class="button button--ghost" type="button" id="cancelAnalysisButton">
+                      <span data-icon="circle-stop"></span>
+                      Отменить анализ
+                    </button>
+                  </div>
+                  <div class="progress progress--wide"><span id="overallProgressBar" style="width: 0%"></span></div>
+                  <div class="analysis-steps" id="analysisSteps"></div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="summaryStage">
+                <section class="card summary-card">
+                  <p class="eyebrow">Анализ завершен</p>
+                  <h2>Краткое резюме</h2>
+                  <div class="summary-score"><strong id="summaryScore">S?</strong><span>текущая стадия</span></div>
+                  <p id="summaryVerdict">Работа выполнена на хорошем уровне.</p>
+                  <div class="summary-grid">
+                    <div>
+                      <h3>Главные сильные стороны</h3>
+                      <ul id="summaryStrengths"></ul>
+                    </div>
+                    <div>
+                      <h3>Главные зоны развития</h3>
+                      <ul id="summaryImprovements"></ul>
+                    </div>
+                  </div>
+                  <div class="summary-actions">
+                    <button class="button" type="button" id="detailsButton">Посмотреть подробный анализ</button>
+                    <button class="button button--secondary" type="button" id="summaryReportButton">Скачать отчет</button>
+                    <button class="button button--ghost" type="button" id="summaryResetButton">Начать новую проверку</button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="resultsStage">
+                <nav class="results-nav" aria-label="Навигация по результатам">
+                  <a href="#resultOverview">Обзор</a>
+                  <a href="#resultCriteria">Стадии</a>
+                  <a href="#resultRemarks">Возражения</a>
+                  <a href="#resultRecommendations">Следующий шаг</a>
+                  <a href="#resultChat">Диалог</a>
+                </nav>
+                <div class="results-grid">
+                  <section class="card score-card" id="resultOverview">
+                    <div>
+                      <p class="eyebrow">Текущая стадия</p>
+                      <strong>S?</strong>
+                      <span>Работа выполнена на хорошем уровне</span>
+                    </div>
+                    <div class="score-ring">87</div>
+                  </section>
+
+                  <section class="card criteria-card" id="resultCriteria">
+                    <h2>Путь работы по стадиям</h2>
+                    <div id="criteriaList"></div>
+                  </section>
+
+                  <section class="card list-card">
+                    <h2>Что устояло</h2>
+                    <ul id="strengthsList"></ul>
+                  </section>
+
+                  <section class="card list-card">
+                    <h2>Главные возражения</h2>
+                    <ul id="improvementsList"></ul>
+                  </section>
+                </div>
+
+                <section class="card document-review" id="resultRemarks">
+                  <div class="section-heading">
+                    <span data-icon="message-square-warning"></span>
+                    <div>
+                      <h2>Возражения</h2>
+                    </div>
+                  </div>
+                  <div class="document-review__grid">
+                    <article class="document-page" id="documentText"></article>
+                    <aside class="remark-card">
+                      <div id="remarkContent"></div>
+                      <div class="remark-card__actions" id="remarkTabs"></div>
+                    </aside>
+                  </div>
+                </section>
+
+                <section class="card ai-risk-card">
+                  <div class="section-heading">
+                    <span data-icon="sparkles"></span>
+                    <div>
+                      <h2>Один вопрос и следующий шаг</h2>
+                    </div>
+                  </div>
+                  <ul id="aiRiskList"></ul>
+                  <p class="disclaimer">Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.</p>
+                </section>
+
+                <section class="recommendation-section" id="resultRecommendations">
+                  <div class="section-heading">
+                    <span data-icon="route"></span>
+                    <div>
+                      <h2>Следующий шаг</h2>
+                    </div>
+                  </div>
+                  <div class="recommendation-grid" id="recommendationPlan"></div>
+                </section>
+
+                <section class="card directions-card">
+                  <div class="section-heading">
+                    <span data-icon="compass"></span>
+                    <div>
+                      <h2>Как вы хотите улучшить работу?</h2>
+                    </div>
+                  </div>
+                  <div class="direction-buttons" id="directionButtons"></div>
+                  <div class="direction-result" id="directionResult">Выберите направление улучшения.</div>
+                </section>
+
+                <section class="card chat-card" id="resultChat">
+                  <div class="section-heading">
+                    <span data-icon="messages-square"></span>
+                    <div>
+                      <h2>Диалог с цифровым ментором</h2>
+                    </div>
+                  </div>
+                  <div class="quick-questions" id="quickQuestions"></div>
+                  <div class="chat-messages" id="chatMessages"></div>
+                  <div class="chat-tools">
+                    <button class="button button--ghost" type="button" id="clearChatButton">Очистить диалог</button>
+                    <button class="button button--ghost" type="button" id="stopSpeechButton">Остановить речь</button>
+                  </div>
+                  <form class="chat-input" id="chatForm">
+                    <button class="icon-button" type="button" id="micButton" aria-label="Голосовой ввод">
+                      <span data-icon="mic"></span>
+                    </button>
+                    <input id="chatInput" type="text" placeholder="Задайте вопрос ментору" />
+                    <button class="button" type="submit">
+                      <span data-icon="send"></span>
+                      Отправить
+                    </button>
+                  </form>
+                </section>
+                <section class="card report-card">
+                  <div class="section-heading">
+                    <span data-icon="download"></span>
+                    <div>
+                      <h2>Итоговый отчет</h2>
+                    </div>
+                  </div>
+                  <button class="button" type="button" id="reportButton">
+                    <span data-icon="download"></span>
+                    Скачать отчет
+                  </button>
+                  <button class="button button--secondary" type="button" id="finishDemoButton">
+                    <span data-icon="check-circle-2"></span>
+                    Завершить
+                  </button>
+                </section>
+                <section class="card history-card">
+                  <div class="section-heading">
+                    <span data-icon="history"></span>
+                    <div>
+                      <h2>История текущей сессии</h2>
+                    </div>
+                  </div>
+                  <div class="history-list" id="historyList"></div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="finalStage">
+                <section class="card final-card">
+                  <p class="eyebrow">Готово</p>
+                  <h2>Работа завершена</h2>
+                  <p>Я подготовил аналитический отчет, рекомендации и направления дальнейшего развития работы.</p>
+                  <p>Моя задача — помочь автору быстрее улучшить результат, а эксперту — сосредоточиться на содержательной оценке.</p>
+                  <div class="summary-actions">
+                    <button class="button" type="button" id="finalReportButton">Скачать отчет</button>
+                    <button class="button button--secondary" type="button" id="finalResetButton">Начать новую проверку</button>
+                    <button class="button button--ghost" type="button" id="backToResultsButton">Вернуться к результатам</button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="workspace-stage" id="errorStage">
+                <section class="card error-card">
+                  <span data-icon="triangle-alert"></span>
+                  <h2 id="errorTitle">Не удалось обработать документ</h2>
+                  <p id="errorDescription">Проверьте, что файл не поврежден и содержит текстовый слой.</p>
+                  <div class="error-actions">
+                    <button class="button" type="button" id="retryButton">Выбрать другой файл</button>
+                  </div>
+                  <details class="error-details">
+                    <summary>Код обращения</summary>
+                    <code id="errorRequestId">Код не получен</code>
+                  </details>
+                </section>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="page" id="aboutPage">
+          <section class="card empty-page">
+            <span data-icon="info"></span>
+            <h2>О проекте</h2>
+            <p>Цифровой ментор помогает автору увидеть сильные стороны работы, замечания, рекомендации и направления дальнейшего развития.</p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <div class="notification" id="notification" role="status" aria-live="polite"></div>
+    <div class="modal-overlay" id="recommendationModal" hidden>
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recommendationModalTitle">
+        <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
+          <span data-icon="x"></span>
+        </button>
+        <div class="modal-card__badge" id="recommendationModalPriority">1</div>
+        <p class="eyebrow">Рекомендация</p>
+        <h2 id="recommendationModalTitle">План доработки</h2>
+        <p id="recommendationModalDescription"></p>
+        <div class="modal-card__grid">
+          <div>
+            <span>Эффект</span>
+            <strong id="recommendationModalEffect"></strong>
+          </div>
+          <div>
+            <span>Сложность</span>
+            <strong id="recommendationModalComplexity"></strong>
+          </div>
+        </div>
+        <div class="modal-card__section">
+          <h3>Что сделать</h3>
+          <p id="recommendationModalAction"></p>
+        </div>
+        <div class="modal-card__actions">
+          <button class="button" type="button" id="recommendationModalAccept">Учту</button>
+          <button class="button button--secondary" type="button" id="recommendationModalOk">Понятно</button>
+        </div>
+      </section>
+    </div>
+    <aside class="presenter-panel" id="presenterPanel" hidden aria-label="Панель ведущего">
+      <div class="presenter-panel__header">
+        <strong>Панель ведущего</strong>
+        <button class="icon-button" type="button" id="presenterCloseButton" aria-label="Закрыть панель">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+      <div class="presenter-panel__actions">
+        <button type="button" data-presenter-action="reset">Сбросить сценарий</button>
+        <button type="button" data-presenter-action="upload">Перейти к загрузке</button>
+        <button type="button" data-presenter-action="analysis">Перейти к анализу</button>
+        <button type="button" data-presenter-action="summary">Открыть результат</button>
+        <button type="button" data-presenter-action="mock">Резервный режим</button>
+        <button type="button" data-presenter-action="sound">Звук вкл/выкл</button>
+        <button type="button" data-presenter-action="ready">Проверить готовность</button>
+        <button type="button" data-presenter-action="fullscreen">Полноэкранный режим</button>
+      </div>
+      <div class="readiness-table" id="readinessTable"></div>
+    </aside>
+
+    <script type="module" src="./src/js/app.js"></script>
+  </body>
+</html>
