@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import binascii
 from dataclasses import dataclass
 import logging
 from pathlib import Path
@@ -53,7 +55,7 @@ class TtsService:
 
         audio_id = self._analysis_audio_id(analysis_id)
         path = self.storage.audio_path(audio_id)
-        if path.exists() and path.stat().st_size > 0:
+        if self._is_valid_mp3_file(path):
             return self._result(
                 status="ready",
                 audio_id=audio_id,
@@ -75,7 +77,7 @@ class TtsService:
             raise AppError("TTS_TEXT_NOT_FOUND", "Нет текста для озвучивания", status_code=422)
         resolved_audio_id = audio_id or f"tts_{uuid4()}"
         path = self.storage.audio_path(resolved_audio_id)
-        if path.exists() and path.stat().st_size > 0:
+        if self._is_valid_mp3_file(path):
             return self._result(
                 status="ready",
                 audio_id=resolved_audio_id,
@@ -121,7 +123,8 @@ class TtsService:
                         self._log_result("fallback", attempts, start, last_error_code, source="polza")
                         return self._fallback(last_error_code, attempts=attempts, latency_ms=self._elapsed_ms(start))
                     response.raise_for_status()
-                    path.write_bytes(response.content)
+                    audio = self._decode_audio_response(response)
+                    path.write_bytes(audio)
                     latency_ms = self._elapsed_ms(start)
                     result = self._result(
                         status="ready",
@@ -191,6 +194,38 @@ class TtsService:
     def _normalize_text(self, text: str) -> str:
         normalized = " ".join(text.split()).strip()
         return normalized[: settings.tts_max_text_length]
+
+    def _decode_audio_response(self, response: httpx.Response) -> bytes:
+        content_type = response.headers.get("content-type", "").lower()
+        if "application/json" in content_type or response.content.lstrip().startswith(b"{"):
+            payload = response.json()
+            encoded = payload.get("audio") if isinstance(payload, dict) else None
+            provider_content_type = payload.get("contentType") if isinstance(payload, dict) else None
+            if not isinstance(encoded, str) or not encoded:
+                raise ValueError("Polza TTS response does not contain audio")
+            if provider_content_type and provider_content_type != "audio/mpeg":
+                raise ValueError(f"Unsupported Polza TTS content type: {provider_content_type}")
+            try:
+                audio = base64.b64decode(encoded, validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise ValueError("Polza TTS response contains invalid base64 audio") from exc
+        else:
+            audio = response.content
+
+        if not self._is_valid_mp3(audio):
+            raise ValueError("Polza TTS response is not valid MP3 data")
+        return audio
+
+    def _is_valid_mp3_file(self, path: Path) -> bool:
+        if not path.exists() or path.stat().st_size < 3:
+            return False
+        with path.open("rb") as source:
+            return self._is_valid_mp3(source.read(3))
+
+    def _is_valid_mp3(self, audio: bytes) -> bool:
+        return audio.startswith(b"ID3") or (
+            len(audio) >= 2 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0
+        )
 
     def _analysis_audio_id(self, analysis_id: str) -> str:
         return f"analysis_{analysis_id}"

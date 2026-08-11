@@ -1,3 +1,6 @@
+import base64
+
+import httpx
 import pytest
 from uuid import uuid4
 
@@ -74,3 +77,33 @@ async def test_tts_fallback_does_not_change_completed_analysis_status():
             assert analysis.status == "completed"
     finally:
         object.__setattr__(settings, "polza_api_key", original_key)
+
+
+def test_tts_decodes_polza_json_audio_response():
+    mp3 = b"ID3remote-audio"
+    response = httpx.Response(
+        200,
+        headers={"content-type": "application/json"},
+        json={
+            "audio": base64.b64encode(mp3).decode("ascii"),
+            "contentType": "audio/mpeg",
+            "model": "gpt-4o-mini-tts",
+            "usage": {},
+        },
+    )
+
+    assert TtsService()._decode_audio_response(response) == mp3
+
+
+def test_tts_accepts_binary_mp3_response():
+    mp3 = b"ID3binary-audio"
+    response = httpx.Response(200, headers={"content-type": "audio/mpeg"}, content=mp3)
+
+    assert TtsService()._decode_audio_response(response) == mp3
+
+
+def test_tts_rejects_json_saved_as_mp3(tmp_path):
+    path = tmp_path / "broken.mp3"
+    path.write_text('{"audio":"not-an-mp3"}')
+
+    assert TtsService()._is_valid_mp3_file(path) is False
