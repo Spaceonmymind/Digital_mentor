@@ -201,6 +201,14 @@ class FakeStartupLLM:
         )
 
 
+class FailingDemoFinalLLM(FakeStartupLLM):
+    async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
+        if response_model is DemoFinalReport:
+            self.calls.append({"model": model, "response_model": response_model.__name__, "user_prompt": user_prompt, **kwargs})
+            raise RuntimeError("truncated demo final json")
+        return await super().ask(model, system_prompt, user_prompt, response_model, **kwargs)
+
+
 @pytest.mark.asyncio
 async def test_startup_vkr_seed_creates_real_methodology_without_demo_plan_items():
     document = await seed_document("ВКР описывает стартап и механизм цифрового сервиса.")
@@ -340,9 +348,44 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
     assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
     assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"} == {700}
-    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {900}
+    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1200}
     assert metrics["mode"] == "demo"
     assert metrics["agent_time_a15"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_startup_vkr_demo_flow_falls_back_when_final_json_is_invalid():
+    document = await seed_document("Резюме проекта. Проблема KYC. Архитектура DID Wallet Verifier. Экономика SAM NPV. Риски отказов.")
+    llm = FailingDemoFinalLLM()
+    async with async_session_factory() as session:
+        await ensure_startup_vkr_seed(session)
+        pipeline = await PipelineService(session).build(
+            PipelineBuildRequest(artifact_type="STARTUP_VKR", artifact_id=document.id, filename=document.original_name)
+        )
+        payload, _ = await StartupVkrAgentFlow(session, llm_client=llm).execute_demo(pipeline.assessment_id, analysis_id="analysis-demo-fallback")
+        task_run = (
+            await session.execute(
+                select(AgentTaskRun).where(
+                    AgentTaskRun.assessment_id == pipeline.assessment_id,
+                    AgentTaskRun.model_role == "final_expert",
+                )
+            )
+        ).scalar_one()
+        final_result = (
+            await session.execute(
+                select(AgentResult).where(
+                    AgentResult.assessment_id == pipeline.assessment_id,
+                    AgentResult.model_role == "final_expert",
+                )
+            )
+        ).scalar_one()
+
+    assert payload.extra_blocks["mode"] == "demo"
+    assert payload.overall_score is not None
+    assert task_run.status == "completed"
+    assert task_run.error_code == "DEMO_FINAL_FALLBACK"
+    assert final_result.llm_call_id is None
+    assert "собран из результатов независимых проверок" in payload.verdict
 
 
 def test_mentor_report_rejects_internal_terms_and_invalid_stage_score():

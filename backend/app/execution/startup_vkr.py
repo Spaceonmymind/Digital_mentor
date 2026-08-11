@@ -332,13 +332,19 @@ class StartupVkrAgentFlow:
         )
         try:
             started = time.monotonic()
-            llm_result = await self._ask(FINAL_EXPERT, system, user, DemoFinalReport, 0, 900)
+            llm_result = await self._ask(FINAL_EXPERT, system, user, DemoFinalReport, 0, 1200)
             result = await self._save_agent_success(assessment.id, agent, task_run, llm_result, idempotency_key, analysis_id)
             result.latency_ms = int((time.monotonic() - started) * 1000)
             return result
         except Exception as exc:
-            await self._save_agent_failure(task_run, exc)
-            raise
+            logger.warning("demo_final_llm_failed_using_fallback assessment_id=%s error=%s", assessment.id, type(exc).__name__)
+            return await self._save_demo_final_fallback(
+                assessment.id,
+                agent,
+                task_run,
+                idempotency_key,
+                int((time.monotonic() - started) * 1000),
+            )
 
     async def _build_demo_result(
         self,
@@ -407,6 +413,87 @@ class StartupVkrAgentFlow:
             "agent_time_a01": final_result.latency_ms,
         }
         return payload, metrics
+
+    async def _save_demo_final_fallback(
+        self,
+        assessment_id: str,
+        agent: MethodologyAgent,
+        task_run: AgentTaskRun,
+        idempotency_key: str,
+        latency_ms: int,
+    ) -> AgentExecutionResult:
+        package = await self._demo_agent_package(assessment_id)
+        by_agent = {
+            item["agent_code"]: DemoAgentOutput.model_validate(item["output"])
+            for item in package
+            if item.get("agent_code") in DEMO_AGENT_CONFIG
+        }
+
+        def score(agent_code: str, default: int = 4) -> int:
+            return by_agent.get(agent_code).score if by_agent.get(agent_code) else default
+
+        def text_items(field: str, limit: int = 3) -> list[str]:
+            items: list[str] = []
+            for output in by_agent.values():
+                items.extend(getattr(output, field, []) or [])
+            return items[:limit] or ["Недостаточно данных для уверенного вывода."]
+
+        problem_score = score("A-15")
+        architecture_score = score("A-17")
+        economy_score = score("A-16")
+        risk_score = score("A-28")
+        solution_score = min(problem_score, architecture_score)
+        innovation_score = min(solution_score, risk_score + 1)
+
+        report = DemoFinalReport(
+            overall_score=0,
+            criteria=[
+                {"name": "Проблема", "score": problem_score, "comment": by_agent.get("A-15").summary if by_agent.get("A-15") else "Проблема оценена ограниченно."},
+                {"name": "Решение", "score": solution_score, "comment": "Оценка снижена до уровня доказанности проблемы и архитектуры."},
+                {"name": "Архитектура", "score": architecture_score, "comment": by_agent.get("A-17").summary if by_agent.get("A-17") else "Архитектура оценена ограниченно."},
+                {"name": "Экономика", "score": economy_score, "comment": by_agent.get("A-16").summary if by_agent.get("A-16") else "Экономика оценена ограниченно."},
+                {"name": "Риски", "score": risk_score, "comment": by_agent.get("A-28").summary if by_agent.get("A-28") else "Риски оценены ограниченно."},
+                {"name": "Инновационность", "score": innovation_score, "comment": "В demo-режиме новизна не повышается без доказанного решения и рисков."},
+            ],
+            strengths=text_items("strengths"),
+            remarks=text_items("issues"),
+            recommendations=text_items("recommendations"),
+            conclusion="Короткий demo-отчет собран из результатов независимых проверок. Финальный синтез был сокращен автоматически, поэтому используйте подробный отчет для полного разбора.",
+            spoken_summary="Я закончил быстрый разбор. Главные выводы собраны из независимых проверок; подробный отчет даст больше примеров из текста.",
+        )
+        output = report.model_dump(mode="json")
+        agent_result = AgentResult(
+            assessment_id=assessment_id,
+            agent_task_run_id=task_run.id,
+            methodology_agent_id=agent.id,
+            agent_code=agent.code,
+            model_role=agent.model_role,
+            output_schema_code=agent.output_schema_code,
+            output_json=output,
+            summary=report.conclusion,
+            confidence=None,
+            llm_call_id=None,
+            idempotency_key=idempotency_key,
+        )
+        task_run.status = "completed"
+        task_run.error_code = "DEMO_FINAL_FALLBACK"
+        task_run.completed_at = datetime.now(timezone.utc)
+        self.session.add_all([task_run, agent_result])
+        await self.session.commit()
+        await self.session.refresh(agent_result)
+        return AgentExecutionResult(
+            task_run_id=task_run.id,
+            agent_result_id=agent_result.id,
+            agent_code=agent.code,
+            model_role=agent.model_role,
+            status="completed",
+            cache_hit=False,
+            llm_call_id=None,
+            tokens=0,
+            cost_rub=Decimal("0"),
+            provider="local_fallback",
+            latency_ms=latency_ms,
+        )
 
     def _agent_time(self, results: list[AgentExecutionResult], agent_code: str) -> int:
         for result in results:
