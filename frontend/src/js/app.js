@@ -479,9 +479,13 @@ function renderAnalysisSteps(activeIndex = -1, progress = 0) {
       return `
         <div class="analysis-step is-${status}">
           <div class="analysis-step__indicator">${indicator}</div>
-          <strong>${agent.title}</strong>
-          <p>${agent.description}</p>
-          <span class="analysis-step__state">${label}</span>
+          <div class="analysis-step__content">
+            <div class="analysis-step__topline">
+              <strong>${agent.title}</strong>
+              <span class="analysis-step__state">${label}</span>
+            </div>
+            <p>${agent.description}</p>
+          </div>
         </div>
       `;
     })
