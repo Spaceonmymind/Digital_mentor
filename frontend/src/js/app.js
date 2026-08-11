@@ -512,9 +512,12 @@ function renderResults(result) {
     .map(
       ({ title, score, explanation }) => `
         <div class="criterion">
-          <span>${title}<small>${explanation || getScoreLevel(score)}</small></span>
+          <div class="criterion__head">
+            <span>${title}</span>
+            <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}%`}</strong>
+          </div>
+          <small>${explanation || getScoreLevel(score)}</small>
           <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : normalized.isDemoReport ? Math.round((score / 10) * 100) : score}%"></span></div>
-          <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}% · ${getScoreLevel(score)}`}</strong>
         </div>
       `,
     )
@@ -523,7 +526,10 @@ function renderResults(result) {
   document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Demo-оценка" : "Итоговая оценка";
   document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score} / 60` : `${normalized.overall_score} / 100`;
   document.querySelector(".score-card > div span").textContent = normalized.verdict;
-  document.querySelector(".score-ring").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score}/60` : normalized.overall_score;
+  const ring = document.querySelector(".score-ring");
+  const scorePercent = normalized.isMentorReport ? 50 : normalized.isDemoReport ? Math.round((normalized.overall_score / 60) * 100) : normalized.overall_score;
+  ring.textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score}/60` : normalized.overall_score;
+  ring.style.setProperty("--score-angle", `${Math.max(0, Math.min(100, scorePercent)) * 3.6}deg`);
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
