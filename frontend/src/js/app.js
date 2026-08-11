@@ -72,6 +72,8 @@ const elements = {
   cancelAnalysisButton: document.getElementById("cancelAnalysisButton"),
   processingFileName: document.getElementById("processingFileName"),
   processingPercent: document.getElementById("processingPercent"),
+  processingPhase: document.getElementById("processingPhase"),
+  processingLiveStep: document.getElementById("processingLiveStep"),
   overallProgressBar: document.getElementById("overallProgressBar"),
   analysisSteps: document.getElementById("analysisSteps"),
   summaryScore: document.getElementById("summaryScore"),
@@ -422,6 +424,8 @@ function resetScenario() {
   elements.filePreview.hidden = true;
   elements.startAnalysisButton.disabled = true;
   elements.processingPercent.textContent = "0%";
+  elements.processingPhase.textContent = "Подготовка документа";
+  elements.processingLiveStep.textContent = "Ожидаю запуск";
   elements.overallProgressBar.style.width = "0%";
   elements.directionResult.textContent = "Выберите направление улучшения.";
   elements.chatMessages.innerHTML = "";
@@ -431,27 +435,41 @@ function resetScenario() {
   renderHistory();
 }
 
-function renderAnalysisSteps(activeIndex = -1) {
-  elements.analysisSteps.innerHTML = analysisSteps
-    .map((step, index) => {
-      const status = index < activeIndex ? "complete" : index === activeIndex ? "running" : "waiting";
-      const label = status === "complete" ? "Завершено" : status === "running" ? "Выполняется" : "Ожидает";
+const processingAgents = [
+  { code: "A-15", title: "Критика", description: "ищет главное противоречие" },
+  { code: "A-16", title: "Экономика", description: "проверяет модель и пороги" },
+  { code: "A-17", title: "Архитектура", description: "смотрит механизм решения" },
+  { code: "A-28", title: "Риски", description: "ловит слабые места" },
+  { code: "A-01", title: "Синтез", description: "собирает итоговый ответ" },
+];
+
+function renderAnalysisSteps(activeIndex = -1, progress = 0) {
+  elements.analysisSteps.innerHTML = processingAgents
+    .map((agent, index) => {
+      let status = "waiting";
+      if (progress >= 100 || index < activeIndex) status = "complete";
+      if (index === activeIndex) status = "running";
+      if (activeIndex === 1 && index >= 0 && index <= 3) status = "running";
+      if (activeIndex === 4 && index <= 3) status = "complete";
+      const label = status === "complete" ? "готово" : status === "running" ? "в работе" : "ожидает";
       const indicator = status === "complete" ? '<span data-icon="check"></span>' : "";
-      const percent = Math.min(100, Math.round(((index + 1) / analysisSteps.length) * 100));
       return `
         <div class="analysis-step is-${status}">
           <div class="analysis-step__indicator">${indicator}</div>
-          <div>
-            <strong>${step.title}</strong>
-            <p>${step.description || ""}</p>
-          </div>
-          <span class="analysis-step__percent">${percent}%</span>
+          <strong>${agent.code} · ${agent.title}</strong>
+          <p>${agent.description}</p>
           <span class="analysis-step__state">${label}</span>
         </div>
       `;
     })
     .join("");
   renderIcons();
+}
+
+function processingAgentIndex(progress = 0, currentStep = "") {
+  if (currentStep === "demo_final" || progress >= 88) return 4;
+  if (currentStep === "demo_agents" || progress >= 25) return 1;
+  return 0;
 }
 
 function renderResults(result) {
@@ -804,25 +822,25 @@ async function startAnalysis() {
 
   elements.processingFileName.textContent = state.document.name || state.file?.name || "Работа";
   elements.processingPercent.textContent = "0%";
+  elements.processingPhase.textContent = "Подготовка документа";
+  elements.processingLiveStep.textContent = "Запуск анализа";
   elements.overallProgressBar.style.width = "0%";
   showStage("processing");
-  renderAnalysisSteps(0);
+  renderAnalysisSteps(0, 0);
   setMentor("thinking", analysisSteps[0].message);
 
   try {
     const result = await runAnalysis(state.document.id, (status) => {
       if (status.frontendStepIndex !== undefined) {
-        renderAnalysisSteps(status.frontendStepIndex);
+        renderAnalysisSteps(status.frontendStepIndex, status.progress || 0);
       } else {
-        const index = Math.min(
-          analysisSteps.length - 1,
-          Math.max(0, Math.floor((status.progress || 0) / (100 / analysisSteps.length))),
-        );
-        renderAnalysisSteps(index);
+        renderAnalysisSteps(processingAgentIndex(status.progress || 0, status.current_step || ""), status.progress || 0);
         state.analysisId = status.id || state.analysisId;
       }
       const progress = Math.max(0, Math.min(100, status.progress || 0));
       elements.processingPercent.textContent = `${progress}%`;
+      elements.processingPhase.textContent = status.message || "Агенты анализируют документ";
+      elements.processingLiveStep.textContent = status.current_step || "analysis";
       elements.overallProgressBar.style.width = `${progress}%`;
       const shouldSpeak = [20, 48, 72, 95].some((mark) => Math.abs(progress - mark) <= 3);
       const stepKey = status.current_step || status.message;
@@ -836,8 +854,10 @@ async function startAnalysis() {
 
     state.analysisId = result.analysis_id || state.analysisId;
     elements.processingPercent.textContent = "100%";
+    elements.processingPhase.textContent = "Быстрый анализ готов";
+    elements.processingLiveStep.textContent = "Завершено";
     elements.overallProgressBar.style.width = "100%";
-    renderAnalysisSteps(analysisSteps.length);
+    renderAnalysisSteps(processingAgents.length, 100);
     renderResults(result);
     renderDocumentReview();
     renderRecommendationPlan(normalizeResult(result).recommendations);

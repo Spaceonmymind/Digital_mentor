@@ -1057,51 +1057,206 @@ button {
   justify-content: flex-end;
 }
 
-.analysis-steps {
-  display: grid;
-  gap: 12px;
+.processing-console {
+  position: relative;
+  overflow: hidden;
 }
 
-#processingStage .card {
-  padding: 76px 30px 30px;
-  margin-top: 42px;
+.processing-console::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(0, 117, 128, 0.08) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(0, 117, 128, 0.06) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 72%);
+}
+
+.processing-console__top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.processing-console__top h2 {
+  margin: 4px 0 8px;
+  font-size: clamp(32px, 4vw, 54px);
+}
+
+.processing-console__top p:last-child {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.processing-showcase {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1fr);
+  gap: clamp(24px, 4vw, 58px);
+  align-items: center;
+  margin-top: 24px;
+}
+
+.mentor-scanner {
+  position: relative;
+  width: min(100%, 390px);
+  aspect-ratio: 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.98) 0 18%, rgba(233, 248, 248, 0.72) 19% 48%, rgba(255, 255, 255, 0.34) 49% 100%);
+  box-shadow: inset 0 0 0 1px rgba(0, 99, 108, 0.16), 0 24px 70px rgba(20, 51, 65, 0.14);
+}
+
+.scanner-ring,
+.scanner-sweep,
+.scanner-core,
+.scanner-node {
+  position: absolute;
+}
+
+.scanner-ring {
+  inset: 10%;
+  border: 1px solid rgba(0, 103, 112, 0.22);
+  border-radius: 50%;
+}
+
+.scanner-ring--outer {
+  inset: 2%;
+  animation: scannerPulse 2.6s ease-in-out infinite;
+}
+
+.scanner-ring--middle {
+  inset: 19%;
+  border-style: dashed;
+  animation: spin 14s linear infinite;
+}
+
+.scanner-ring--inner {
+  inset: 34%;
+}
+
+.scanner-sweep {
+  inset: 50% 50% auto 50%;
+  width: 44%;
+  height: 2px;
+  transform-origin: left center;
+  background: linear-gradient(90deg, rgba(0, 116, 128, 0.85), rgba(221, 156, 65, 0));
+  animation: spin 2.2s linear infinite;
+}
+
+.scanner-core {
+  inset: 50% auto auto 50%;
+  width: 128px;
+  height: 128px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(20, 51, 65, 0.16);
+}
+
+.scanner-core span {
+  font-size: 34px;
+  font-weight: 800;
+  color: var(--green-dark);
+}
+
+.scanner-core small {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.scanner-node {
+  min-width: 54px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  background: #43666b;
+  box-shadow: 0 12px 28px rgba(20, 51, 65, 0.2);
+}
+
+.scanner-node--a15 { left: 7%; top: 27%; }
+.scanner-node--a16 { right: 6%; top: 25%; }
+.scanner-node--a17 { left: 15%; bottom: 16%; }
+.scanner-node--a28 { right: 13%; bottom: 15%; }
+.scanner-node--a01 { left: 50%; top: 4%; transform: translateX(-50%); background: #946229; }
+
+.processing-readout {
+  display: grid;
+  gap: 18px;
+}
+
+.analysis-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .analysis-step {
-  min-height: 58px;
+  min-height: 112px;
   display: grid;
-  grid-template-columns: 34px 1fr auto;
-  align-items: center;
-  gap: 14px;
-  padding: 13px 16px;
-  border-radius: 12px;
-  background: white;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 92, 102, 0.12);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .analysis-step__indicator {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #d5dddd;
+  color: #ffffff;
+  background: #9aaaae;
+}
+
+.analysis-step.is-running {
+  border-color: rgba(0, 116, 128, 0.38);
+  background: #ffffff;
+  box-shadow: 0 18px 36px rgba(20, 51, 65, 0.1);
 }
 
 .analysis-step.is-running .analysis-step__indicator {
-  border: 3px solid var(--green-light);
-  border-top-color: var(--green-main);
-  background: transparent;
-  animation: spin 0.85s linear infinite;
+  background: var(--green-main);
+  animation: scannerPulse 1.4s ease-in-out infinite;
 }
 
 .analysis-step.is-complete .analysis-step__indicator {
-  color: white;
   background: var(--success);
+}
+
+.analysis-step strong {
+  display: block;
+  font-size: 14px;
+}
+
+.analysis-step p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .analysis-step__state {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .results-grid {
@@ -1559,6 +1714,39 @@ button {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes scannerPulse {
+  50% {
+    opacity: 0.58;
+    transform: scale(1.035);
+  }
+}
+
+@media (max-width: 980px) {
+  .processing-showcase {
+    grid-template-columns: 1fr;
+  }
+
+  .mentor-scanner {
+    max-width: 320px;
+  }
+
+  .analysis-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .processing-console__top,
+  .analysis-headline {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .analysis-steps {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3425,6 +3613,36 @@ body.is-modal-open {
 
 .page {
   padding-top: 0;
+}
+
+#processingStage .analysis-steps {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+#processingStage .analysis-step {
+  min-height: 112px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  align-items: start;
+  gap: 8px;
+}
+
+#processingStage .analysis-step p,
+#processingStage .analysis-step strong {
+  min-width: 0;
+}
+
+@media (max-width: 980px) {
+  #processingStage .analysis-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  #processingStage .analysis-steps {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 1040px) {

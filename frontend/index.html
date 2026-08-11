@@ -166,30 +166,51 @@
               </div>
 
               <div class="workspace-stage" id="processingStage">
-                <section class="card">
-                  <div class="section-heading">
-                    <span data-icon="scan-search"></span>
+                <section class="card processing-console">
+                  <div class="processing-console__top">
                     <div>
-                      <h2>Идет анализ работы</h2>
-                      <p>Ментор последовательно проверяет структуру, содержание, стиль и признаки генеративного ИИ.</p>
-                    </div>
-                  </div>
-                  <div class="analysis-headline">
-                    <div>
-                      <span>Документ</span>
-                      <strong id="processingFileName">Работа</strong>
-                    </div>
-                    <div>
-                      <span>Общий прогресс</span>
-                      <strong id="processingPercent">0%</strong>
+                      <p class="eyebrow">AI-анализ</p>
+                      <h2>Агенты читают работу</h2>
+                      <p id="processingPhase">Подготовка документа</p>
                     </div>
                     <button class="button button--ghost" type="button" id="cancelAnalysisButton">
                       <span data-icon="circle-stop"></span>
-                      Отменить анализ
+                      Отменить
                     </button>
                   </div>
-                  <div class="progress progress--wide"><span id="overallProgressBar" style="width: 0%"></span></div>
-                  <div class="analysis-steps" id="analysisSteps"></div>
+
+                  <div class="processing-showcase">
+                    <div class="mentor-scanner" aria-hidden="true">
+                      <div class="scanner-ring scanner-ring--outer"></div>
+                      <div class="scanner-ring scanner-ring--middle"></div>
+                      <div class="scanner-ring scanner-ring--inner"></div>
+                      <div class="scanner-sweep"></div>
+                      <div class="scanner-core">
+                        <span id="processingPercent">0%</span>
+                        <small>готово</small>
+                      </div>
+                      <span class="scanner-node scanner-node--a15">A-15</span>
+                      <span class="scanner-node scanner-node--a16">A-16</span>
+                      <span class="scanner-node scanner-node--a17">A-17</span>
+                      <span class="scanner-node scanner-node--a28">A-28</span>
+                      <span class="scanner-node scanner-node--a01">A-01</span>
+                    </div>
+
+                    <div class="processing-readout">
+                      <div class="analysis-headline">
+                        <div>
+                          <span>Документ</span>
+                          <strong id="processingFileName">Работа</strong>
+                        </div>
+                        <div>
+                          <span>Сейчас</span>
+                          <strong id="processingLiveStep">Запуск анализа</strong>
+                        </div>
+                      </div>
+                      <div class="progress progress--wide"><span id="overallProgressBar" style="width: 0%"></span></div>
+                      <div class="analysis-steps" id="analysisSteps"></div>
+                    </div>
+                  </div>
                 </section>
               </div>
 
