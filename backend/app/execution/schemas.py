@@ -2,9 +2,29 @@ from __future__ import annotations
 
 import re
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+def normalize_demo_score(value: Any, *, max_score: int = 10) -> int:
+    if isinstance(value, str):
+        match = re.search(r"-?\d+(?:[.,]\d+)?", value)
+        if not match:
+            raise ValueError("demo score must contain a number")
+        numeric = float(match.group(0).replace(",", "."))
+    else:
+        numeric = float(value)
+    if numeric < 0:
+        raise ValueError("demo score must be non-negative")
+    if max_score == 10 and numeric > 10 and numeric <= 100:
+        numeric = numeric / 10
+    elif max_score == 60 and numeric > 60 and numeric <= 100:
+        numeric = numeric * 0.6
+    score = int(round(numeric))
+    if score < 0 or score > max_score:
+        raise ValueError(f"demo score must be between 0 and {max_score}")
+    return score
 
 
 class EvidenceItem(BaseModel):
@@ -354,12 +374,15 @@ class DemoAgentOutput(BaseModel):
     recommendations: list[str]
     score: int
 
+    @field_validator("score", mode="before")
+    @classmethod
+    def normalize_score(cls, value: Any) -> int:
+        return normalize_demo_score(value, max_score=10)
+
     @model_validator(mode="after")
     def limit_demo_lists(self):
         if not self.summary.strip():
             raise ValueError("summary is required")
-        if self.score < 0 or self.score > 10:
-            raise ValueError("demo score must be between 0 and 10")
         self.summary = self.summary[:500]
         self.strengths = self.strengths[:3]
         self.issues = self.issues[:3]
@@ -374,10 +397,13 @@ class DemoCriterionScore(BaseModel):
     score: int
     comment: str
 
+    @field_validator("score", mode="before")
+    @classmethod
+    def normalize_score(cls, value: Any) -> int:
+        return normalize_demo_score(value, max_score=10)
+
     @model_validator(mode="after")
     def validate_demo_criterion(self):
-        if self.score < 0 or self.score > 10:
-            raise ValueError("demo criterion score must be between 0 and 10")
         if not self.comment.strip():
             raise ValueError("demo criterion comment is required")
         self.comment = self.comment[:500]
@@ -395,10 +421,13 @@ class DemoFinalReport(BaseModel):
     conclusion: str
     spoken_summary: str
 
+    @field_validator("overall_score", mode="before")
+    @classmethod
+    def normalize_overall_score(cls, value: Any) -> int:
+        return normalize_demo_score(value, max_score=60)
+
     @model_validator(mode="after")
     def validate_score_sum(self):
-        if self.overall_score < 0 or self.overall_score > 60:
-            raise ValueError("demo overall score must be between 0 and 60")
         if len(self.criteria) != 6:
             raise ValueError("demo final report requires exactly 6 criteria")
         if not self.conclusion.strip():
@@ -412,7 +441,9 @@ class DemoFinalReport(BaseModel):
         self.spoken_summary = self.spoken_summary[:700]
         total = sum(item.score for item in self.criteria)
         if self.overall_score != total:
-            raise ValueError("overall_score must equal sum of criteria scores")
+            self.overall_score = total
+        if self.overall_score < 0 or self.overall_score > 60:
+            raise ValueError("demo overall score must be between 0 and 60")
         return self
 
 

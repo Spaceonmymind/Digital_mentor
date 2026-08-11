@@ -410,6 +410,40 @@ def test_demo_schemas_do_not_emit_unsupported_array_size_keywords():
         assert keyword not in schema_text
 
 
+def test_demo_scores_accept_percent_like_model_output():
+    agent = DemoAgentOutput.model_validate(
+        {
+            "summary": "Короткий вывод.",
+            "strengths": ["Есть проблема"],
+            "issues": ["Мало доказательств"],
+            "recommendations": ["Уточнить расчет"],
+            "score": 55,
+        }
+    )
+    assert agent.score == 6
+
+    report = DemoFinalReport.model_validate(
+        {
+            "overall_score": 55,
+            "criteria": [
+                {"name": "Проблема", "score": "80%", "comment": "Проблема видна."},
+                {"name": "Решение", "score": 70, "comment": "Решение описано."},
+                {"name": "Архитектура", "score": "6/10", "comment": "Архитектура намечена."},
+                {"name": "Экономика", "score": 50, "comment": "Экономика требует проверки."},
+                {"name": "Риски", "score": 4, "comment": "Риски перечислены."},
+                {"name": "Инновационность", "score": 90, "comment": "Новизна заявлена."},
+            ],
+            "strengths": ["Сильное ядро"],
+            "remarks": ["Нужна проверка"],
+            "recommendations": ["Собрать доказательства"],
+            "conclusion": "Работу можно быстро улучшить.",
+            "spoken_summary": "Я закончил разбор.",
+        }
+    )
+    assert [item.score for item in report.criteria] == [8, 7, 6, 5, 4, 9]
+    assert report.overall_score == 39
+
+
 def test_student_pdf_uses_mentor_report_without_technical_dump():
     report = FakeStartupLLM()._mentor_report().model_dump(mode="json")
     analysis = Analysis(
