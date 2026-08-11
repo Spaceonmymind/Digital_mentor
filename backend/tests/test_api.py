@@ -11,7 +11,7 @@ from app.api.v1 import documents as documents_api
 from app.api.v1 import internal_llm as internal_llm_api
 from app.assessment.models import Assessment
 from app.db.models import Analysis
-from app.db.models import AnalysisEvent, LLMCall
+from app.db.models import AnalysisEvent, AnalysisResult, LLMCall
 from app.db.session import async_session_factory
 from app.llm.errors import LLMConfigurationError
 from app.llm.registry import AGGREGATOR, WORKER
@@ -19,6 +19,7 @@ from app.llm.schemas import LLMResult, LLMTestStructuredResponse, LLMUsage
 from app.main import app
 from app.methodology.models import Methodology, MethodologyCriterion, MethodologyIndicator, PromptTemplate
 from app.pipeline.artifact_resolver import ArtifactResolver
+from app.services import chat_service
 
 
 def make_pdf_bytes(text: str = "Методы исследования\nДля анализа был использован сравнительный подход.") -> bytes:
@@ -44,6 +45,21 @@ async def upload_pdf(client):
     response = await client.post(
         "/api/v1/documents",
         files={"upload": ("work.pdf", make_pdf_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def upload_docx(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={
+            "upload": (
+                "work.docx",
+                make_docx_bytes("Методы исследования\nДля анализа был использован сравнительный подход."),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -565,7 +581,7 @@ async def test_reject_file_over_size_limit(client):
 
 @pytest.mark.asyncio
 async def test_create_analysis_progress_and_result(client):
-    document = await upload_pdf(client)
+    document = await upload_docx(client)
     create_response = await client.post(
         "/api/v1/analyses",
         json={
@@ -634,7 +650,8 @@ async def test_create_analysis_progress_and_result(client):
     detailed_text = "\n".join(page.get_text() for page in detailed_pdf)
     detailed_pdf.close()
     assert "Подробный аналитический отчет" in detailed_text
-    assert "Примеры из текста документа" in detailed_text
+    assert "Конкретные фрагменты текста" in detailed_text
+    assert "Для анализа был использован сравнительный подход" in detailed_text
 
 
 @pytest.mark.asyncio
@@ -727,3 +744,59 @@ async def test_chat_response_for_analysis(client):
     payload = response.json()
     assert payload["message_id"]
     assert "90" in payload["answer"]
+
+
+@pytest.mark.asyncio
+async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeypatch):
+    captured = {}
+
+    class FakeChatLLM:
+        async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
+            captured["user_prompt"] = user_prompt
+            return LLMResult(
+                output=response_model(answer="Покажите фрагмент про сравнительный подход и добавьте критерии проверки."),
+                provider_response_id="chat-test",
+                requested_model=model,
+                actual_model=model,
+                aggregator=AGGREGATOR,
+                provider="fake",
+                finish_reason="stop",
+                usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15, cost_rub=Decimal("0.01")),
+                latency_ms=1,
+                status="success",
+            )
+
+    monkeypatch.setattr(chat_service, "LLMClient", lambda: FakeChatLLM())
+    document = await upload_docx(client)
+    create_response = await client.post(
+        "/api/v1/analyses",
+        json={
+            "document_id": document["id"],
+            "analysis_type": "mentor",
+            "methodology_id": "mentor-default",
+            "methodology_version": "draft",
+        },
+    )
+    analysis_id = create_response.json()["analysis_id"]
+    await wait_for_completed_analysis(client, analysis_id)
+    async with async_session_factory() as session:
+        analysis = await session.get(Analysis, analysis_id)
+        analysis.methodology_id = "STARTUP_VKR"
+        result = (
+            await session.execute(select(AnalysisResult).where(AnalysisResult.analysis_id == analysis_id).limit(1))
+        ).scalar_one()
+        result.result_json = {
+            **result.result_json,
+            "remarks": [{"title": "Недостаточно раскрыт сравнительный подход", "recommendation": "Добавить критерии проверки."}],
+        }
+        session.add_all([analysis, result])
+        await session.commit()
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"analysis_id": analysis_id, "message": "Какой фрагмент текста мне править?"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert "Релевантные фрагменты исходного документа" in captured["user_prompt"]
+    assert "Для анализа был использован сравнительный подход" in captured["user_prompt"]

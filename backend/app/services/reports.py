@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -9,6 +8,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisResult, Document
 from app.schemas.reports import ReportResponse
+from app.services.document_context import document_fragments_for_report
 from app.services.storage import DocumentStorage
 
 
@@ -216,7 +216,7 @@ class ReportService:
         demo_report = extra.get("demo_report") or {}
         mentor_report = extra.get("mentor_report") or {}
         source_report = demo_report or mentor_report
-        excerpts = self._document_excerpts(document)
+        fragments = document_fragments_for_report(document, payload)
 
         lines = [
             "ЦИФРОВОЙ МЕНТОР",
@@ -277,10 +277,22 @@ class ReportService:
                 ]
             )
 
-        lines.extend(["", "6. Примеры из текста документа:"])
-        if excerpts:
-            for index, excerpt in enumerate(excerpts, start=1):
-                lines.extend([f"Фрагмент {index}:", excerpt])
+        lines.extend(["", "6. Конкретные фрагменты текста и как их править:"])
+        if fragments:
+            for index, fragment in enumerate(fragments, start=1):
+                location = []
+                if fragment.get("page"):
+                    location.append(f"стр. {fragment.get('page')}")
+                if fragment.get("section"):
+                    location.append(str(fragment.get("section")))
+                location_label = ", ".join(location) or f"блок {fragment.get('block_index')}"
+                lines.extend(
+                    [
+                        f"Фрагмент {index} ({location_label}):",
+                        fragment.get("text") or "",
+                        "Что сделать: проверьте, является ли этот фрагмент доказательством, механизмом, расчетом или только декларацией. Если это декларация, добавьте конкретное действие, источник данных, метрику или условие проверки.",
+                    ]
+                )
         else:
             lines.append("Извлеченный текст документа недоступен для приложения к подробному отчету.")
 
@@ -293,30 +305,12 @@ class ReportService:
                 "- Таблица go/no-go: условие -> порог -> источник данных -> решение.",
                 "",
                 "8. Ограничения:",
-                "- Подробный отчет сформирован из уже сохраненного результата анализа и локально извлеченного текста.",
+                "- Подробный отчет использует быстрый результат анализа и фрагменты исходного текста документа.",
                 "- Он не блокирует быстрый demo-результат и может быть пересобран отдельно.",
                 "- Финальные выводы требуют проверки человеком.",
             ]
         )
         return lines
-
-    def _document_excerpts(self, document: Document, limit: int = 6, excerpt_chars: int = 700) -> list[str]:
-        if not document.extracted_path:
-            return []
-        path = Path(document.extracted_path)
-        if not path.exists():
-            return []
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            return []
-        full_text = str(payload.get("full_text") or "").strip()
-        paragraphs = [line.strip() for line in full_text.splitlines() if len(line.strip()) > 80]
-        keywords = ("проблем", "архитект", "эконом", "риск", "выруч", "заключ")
-        selected = [item for item in paragraphs if any(keyword in item.lower() for keyword in keywords)]
-        if not selected:
-            selected = paragraphs
-        return [item[:excerpt_chars] for item in selected[:limit]]
 
     def _render_pdf(self, lines: list[str]) -> bytes:
         doc = fitz.open()
