@@ -9,7 +9,7 @@ import {
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
 import { FRONTEND_MOCK_MODE } from "./config.js";
 import { renderIcons } from "./icons.js";
-import { cancelAnalysis, createReport, getPublicConfig } from "./api.js";
+import { cancelAnalysis, createReport, getDetailedReportStatus, getPublicConfig, startDetailedReport } from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
@@ -36,6 +36,8 @@ const state = {
   checkedRecommendations: new Set(),
   activeRecommendation: null,
   lastSpokenStep: "",
+  detailedReport: null,
+  detailedReportPoll: null,
 };
 
 const elements = {
@@ -291,6 +293,50 @@ function showNotification(text) {
   window.setTimeout(() => elements.notification.classList.remove("is-visible"), 2600);
 }
 
+function setDetailedReportButtons(status = "not_started") {
+  const buttons = [elements.reportButton, elements.summaryReportButton, elements.finalReportButton].filter(Boolean);
+  const ready = status === "completed";
+  const failed = status === "failed";
+  const label = ready ? "Скачать подробный отчет" : failed ? "Повторить подготовку отчета" : "Подробный отчет готовится...";
+  buttons.forEach((button) => {
+    button.disabled = !ready && !failed;
+    button.textContent = label;
+  });
+}
+
+async function refreshDetailedReportStatus() {
+  if (!state.analysisId) return;
+  const status = await getDetailedReportStatus(state.analysisId);
+  state.detailedReport = status;
+  setDetailedReportButtons(status.status);
+  if (status.status === "completed" || status.status === "failed") {
+    if (state.detailedReportPoll) {
+      window.clearInterval(state.detailedReportPoll);
+      state.detailedReportPoll = null;
+    }
+    showNotification(status.status === "completed" ? "Подробный отчет готов." : "Не удалось подготовить подробный отчет.");
+  }
+}
+
+async function startDetailedReportLoading() {
+  if (!state.analysisId || FRONTEND_MOCK_MODE) return;
+  if (state.detailedReportPoll) {
+    window.clearInterval(state.detailedReportPoll);
+  }
+  setDetailedReportButtons("running");
+  try {
+    state.detailedReport = await startDetailedReport(state.analysisId);
+    setDetailedReportButtons(state.detailedReport.status);
+    state.detailedReportPoll = window.setInterval(() => {
+      refreshDetailedReportStatus().catch(() => {});
+    }, 2500);
+    await refreshDetailedReportStatus();
+  } catch (error) {
+    setDetailedReportButtons("failed");
+    showNotification(error.message || "Не удалось запустить подготовку подробного отчета.");
+  }
+}
+
 function setSidebarCollapsed(collapsed) {
   state.sidebarCollapsed = collapsed;
   elements.appShell.classList.toggle("is-sidebar-collapsed", collapsed);
@@ -357,6 +403,9 @@ async function useDemoDocument() {
 
 function resetScenario() {
   stopSpeech();
+  if (state.detailedReportPoll) {
+    window.clearInterval(state.detailedReportPoll);
+  }
   state.file = null;
   state.document = null;
   state.analysisId = null;
@@ -365,6 +414,9 @@ function resetScenario() {
   state.checkedRecommendations = new Set();
   state.activeRecommendation = null;
   state.lastSpokenStep = "";
+  state.detailedReport = null;
+  state.detailedReportPoll = null;
+  setDetailedReportButtons("not_started");
   closeRecommendationModal();
   elements.fileInput.value = "";
   elements.filePreview.hidden = true;
@@ -791,6 +843,7 @@ async function startAnalysis() {
     renderRecommendationPlan(normalizeResult(result).recommendations);
     renderDirections();
     renderChat();
+    startDetailedReportLoading();
     showStage("summary");
     const normalized = normalizeResult(result);
     setMentor("success", normalized.spokenSummary || `Анализ завершен. Текущая стадия работы: ${normalized.currentStage || "не определена"}.`);
@@ -817,6 +870,17 @@ async function downloadReport() {
     return;
   }
   try {
+    if (!FRONTEND_MOCK_MODE) {
+      if (!state.detailedReport || state.detailedReport.status === "not_started" || state.detailedReport.status === "failed") {
+        await startDetailedReportLoading();
+      }
+      if (state.detailedReport?.status !== "completed") {
+        showNotification("Подробный отчет еще готовится.");
+        return;
+      }
+      window.open(state.detailedReport.report_url, "_blank", "noopener");
+      return;
+    }
     const report = await createReport(state.analysisId);
     window.open(report.report_url, "_blank", "noopener");
     showNotification("Отчет сформирован.");
@@ -1128,6 +1192,7 @@ async function init() {
   setSidebarCollapsed(true);
   updateSoundButton();
   updateMicButton();
+  setDetailedReportButtons("not_started");
   renderHistory();
   showStage("welcome");
   setMentor(

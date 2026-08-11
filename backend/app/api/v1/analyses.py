@@ -11,7 +11,14 @@ from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisEvent, AnalysisResult, Document
 from app.db.session import get_session
 from app.schemas.analyses import AnalysisCreateRequest, AnalysisCreateResponse, AnalysisEventResponse, AnalysisStatusResponse
-from app.schemas.reports import ReportResponse
+from app.schemas.reports import DetailedReportStatusResponse, ReportResponse
+from app.services.detailed_reports import (
+    detailed_report_path,
+    detailed_report_status,
+    generate_detailed_report_task,
+    get_detailed_report,
+    get_or_create_detailed_report,
+)
 from app.schemas.results import AnalysisResultPayload
 from app.services.reports import ReportService
 from app.services.storage import DocumentStorage
@@ -178,6 +185,41 @@ async def create_report(analysis_id: str, session: AsyncSession = Depends(get_se
         raise AppError("REPORT_GENERATION_FAILED", "Не удалось сформировать отчет", status_code=500) from exc
     logger.info("report_created analysis_id=%s report_id=%s", analysis_id, report.report_id)
     return report
+
+
+@router.post("/{analysis_id}/detailed-report", response_model=DetailedReportStatusResponse)
+async def start_detailed_report(
+    analysis_id: str,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> DetailedReportStatusResponse:
+    report = await get_or_create_detailed_report(session, analysis_id)
+    if report.status in {"pending", "failed"}:
+        background_tasks.add_task(generate_detailed_report_task, analysis_id)
+    return detailed_report_status(report, analysis_id)
+
+
+@router.get("/{analysis_id}/detailed-report/status", response_model=DetailedReportStatusResponse)
+async def get_detailed_report_status(
+    analysis_id: str,
+    session: AsyncSession = Depends(get_session),
+) -> DetailedReportStatusResponse:
+    analysis = await session.get(Analysis, analysis_id)
+    if analysis is None:
+        raise AppError("ANALYSIS_NOT_FOUND", "Анализ не найден", status_code=404)
+    report = await get_detailed_report(session, analysis_id)
+    return detailed_report_status(report, analysis_id)
+
+
+@router.get("/{analysis_id}/detailed-report/download")
+async def download_detailed_report(analysis_id: str, session: AsyncSession = Depends(get_session)) -> FileResponse:
+    report = await get_detailed_report(session, analysis_id)
+    if report is None or report.status != "completed":
+        raise AppError("DETAILED_REPORT_NOT_READY", "Подробный отчет еще не готов", status_code=409)
+    path = detailed_report_path(analysis_id, report)
+    if not path.exists():
+        raise AppError("REPORT_NOT_FOUND", "Отчет не найден", status_code=404)
+    return FileResponse(path, media_type="application/pdf", filename=f"digital-mentor-detailed-report-{report.report_id}.pdf")
 
 
 @router.get("/{analysis_id}/reports/{report_id}")

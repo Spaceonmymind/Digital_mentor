@@ -612,6 +612,30 @@ async def test_create_analysis_progress_and_result(client):
     assert "Итоговый отчет" in extracted_text
     assert "Общий балл" in extracted_text
 
+    detailed_response = await client.post(f"/api/v1/analyses/{analysis_id}/detailed-report")
+    assert detailed_response.status_code == 200, detailed_response.text
+    detailed_status = detailed_response.json()
+    assert detailed_status["status"] in {"pending", "running", "completed"}
+
+    for _ in range(20):
+        status_response = await client.get(f"/api/v1/analyses/{analysis_id}/detailed-report/status")
+        assert status_response.status_code == 200, status_response.text
+        detailed_status = status_response.json()
+        if detailed_status["status"] == "completed":
+            break
+        await asyncio.sleep(0.05)
+    assert detailed_status["status"] == "completed"
+    assert detailed_status["report_url"] == f"/api/v1/analyses/{analysis_id}/detailed-report/download"
+
+    detailed_pdf_response = await client.get(detailed_status["report_url"])
+    assert detailed_pdf_response.status_code == 200
+    assert detailed_pdf_response.content.startswith(b"%PDF")
+    detailed_pdf = fitz.open(stream=detailed_pdf_response.content, filetype="pdf")
+    detailed_text = "\n".join(page.get_text() for page in detailed_pdf)
+    detailed_pdf.close()
+    assert "Подробный аналитический отчет" in detailed_text
+    assert "Примеры из текста документа" in detailed_text
+
 
 @pytest.mark.asyncio
 async def test_create_analysis_missing_document(client):

@@ -104,6 +104,20 @@ export async function createReport(analysisId) {
 }
 
 
+export async function startDetailedReport(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/detailed-report`, {
+    method: "POST",
+  });
+  return parseResponse(response);
+}
+
+
+export async function getDetailedReportStatus(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/detailed-report/status`);
+  return parseResponse(response);
+}
+
+
 export async function deleteDocument(documentId, { force = false } = {}) {
   const response = await fetch(`${API_BASE_URL}/documents/${documentId}?force=${force ? "true" : "false"}`, {
     method: "DELETE",

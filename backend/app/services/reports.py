@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -35,6 +36,28 @@ class ReportService:
             analysis_id=analysis.id,
             format="pdf",
             report_url=f"/api/v1/analyses/{analysis.id}/reports/{report_id}",
+            created_at=datetime.now(timezone.utc),
+        )
+
+    def create_detailed_pdf_report(
+        self,
+        analysis: Analysis,
+        document: Document,
+        result: AnalysisResult,
+        report_id: str | None = None,
+    ) -> ReportResponse:
+        if analysis.status != "completed":
+            raise AppError("ANALYSIS_NOT_COMPLETED", "Результат еще не сформирован", status_code=409)
+
+        report_id = report_id or str(uuid4())
+        output_path = self.storage.report_path(analysis.id, report_id)
+        lines = self._build_detailed_lines(analysis, document, result.result_json)
+        output_path.write_bytes(self._render_pdf(lines))
+        return ReportResponse(
+            report_id=report_id,
+            analysis_id=analysis.id,
+            format="pdf",
+            report_url=f"/api/v1/analyses/{analysis.id}/detailed-report/download",
             created_at=datetime.now(timezone.utc),
         )
 
@@ -187,6 +210,113 @@ class ReportService:
         lines.extend(["", "Итоговое заключение:", report.get("conclusion") or ""])
         lines.extend(["", "Отметка: demo-режим использует сокращенный мультиагентный анализ и не заменяет полный expert-разбор."])
         return lines
+
+    def _build_detailed_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
+        extra = payload.get("extra_blocks") or {}
+        demo_report = extra.get("demo_report") or {}
+        mentor_report = extra.get("mentor_report") or {}
+        source_report = demo_report or mentor_report
+        excerpts = self._document_excerpts(document)
+
+        lines = [
+            "ЦИФРОВОЙ МЕНТОР",
+            "Подробный аналитический отчет",
+            "",
+            f"Работа: {document.original_name}",
+            f"Дата анализа: {analysis.completed_at or analysis.created_at}",
+            f"Методология: {(payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {(payload.get('methodology') or {}).get('methodology_version', analysis.methodology_version)}",
+            "",
+            "1. Краткое заключение:",
+            payload.get("verdict") or source_report.get("conclusion") or source_report.get("what_this_work_is") or "",
+            "",
+            "2. Оценки и разбор критериев:",
+        ]
+        if demo_report.get("criteria"):
+            for item in demo_report.get("criteria", []):
+                lines.extend(
+                    [
+                        f"- {item.get('name')}: {item.get('score')} / 10",
+                        f"  Комментарий: {item.get('comment')}",
+                        "  Что проверить в тексте: найдите разделы, где автор показывает наблюдаемую проблему, механизм решения, архитектуру, экономику и риски не декларациями, а проверяемыми элементами.",
+                    ]
+                )
+        else:
+            for item in payload.get("criteria", []):
+                lines.extend(
+                    [
+                        f"- {item.get('title')}: {item.get('score')} / {item.get('max_score', 100)}",
+                        f"  Комментарий: {item.get('explanation', '')}",
+                    ]
+                )
+
+        lines.extend(["", "3. Сильные стороны с пояснениями:"])
+        for item in payload.get("strengths") or source_report.get("strengths") or source_report.get("what_survived") or []:
+            lines.extend([f"- {item}", "  Как усилить: привяжите этот элемент к конкретному месту документа и покажите, почему он выдерживает критическую проверку."])
+
+        lines.extend(["", "4. Замечания и риски:"])
+        remarks = payload.get("remarks") or [{"title": item} for item in source_report.get("remarks", [])]
+        for item in remarks:
+            title = item.get("title") or ""
+            recommendation = item.get("recommendation") or "Уточнить доказательство, механизм и проверяемый результат."
+            lines.extend(
+                [
+                    f"- {title}",
+                    f"  Почему это важно: без этого вывода эксперт не сможет отличить работоспособную конструкцию от декларации.",
+                    f"  Совет: {recommendation}",
+                ]
+            )
+
+        lines.extend(["", "5. Рекомендации к доработке:"])
+        recommendations = payload.get("recommendations") or [{"title": item} for item in source_report.get("recommendations", [])]
+        for item in recommendations:
+            lines.extend(
+                [
+                    f"- {item.get('title') or item}",
+                    f"  Ожидаемый эффект: {item.get('effect') or 'повысит проверяемость и убедительность работы.'}",
+                    f"  Практический шаг: оформите изменение как конкретный фрагмент текста, таблицу, схему или расчет.",
+                ]
+            )
+
+        lines.extend(["", "6. Примеры из текста документа:"])
+        if excerpts:
+            for index, excerpt in enumerate(excerpts, start=1):
+                lines.extend([f"Фрагмент {index}:", excerpt])
+        else:
+            lines.append("Извлеченный текст документа недоступен для приложения к подробному отчету.")
+
+        lines.extend(
+            [
+                "",
+                "7. Предлагаемые схемы для доработки:",
+                "- Схема механизма результата: входные данные -> действие сервиса -> проверяемый результат.",
+                "- Схема доверия: участник -> что видит -> что может изменить -> чем ограничены полномочия.",
+                "- Таблица go/no-go: условие -> порог -> источник данных -> решение.",
+                "",
+                "8. Ограничения:",
+                "- Подробный отчет сформирован из уже сохраненного результата анализа и локально извлеченного текста.",
+                "- Он не блокирует быстрый demo-результат и может быть пересобран отдельно.",
+                "- Финальные выводы требуют проверки человеком.",
+            ]
+        )
+        return lines
+
+    def _document_excerpts(self, document: Document, limit: int = 6, excerpt_chars: int = 700) -> list[str]:
+        if not document.extracted_path:
+            return []
+        path = Path(document.extracted_path)
+        if not path.exists():
+            return []
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        full_text = str(payload.get("full_text") or "").strip()
+        paragraphs = [line.strip() for line in full_text.splitlines() if len(line.strip()) > 80]
+        keywords = ("проблем", "архитект", "эконом", "риск", "выруч", "заключ")
+        selected = [item for item in paragraphs if any(keyword in item.lower() for keyword in keywords)]
+        if not selected:
+            selected = paragraphs
+        return [item[:excerpt_chars] for item in selected[:limit]]
 
     def _render_pdf(self, lines: list[str]) -> bytes:
         doc = fitz.open()
