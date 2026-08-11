@@ -3999,9 +3999,9 @@ body.is-modal-open {
 
 #resultsStage .results-grid {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
-  align-items: stretch;
+  align-items: start;
   margin-bottom: 22px;
 }
 
@@ -4024,13 +4024,17 @@ body.is-modal-open {
 }
 
 #resultsStage .score-card {
-  min-height: 320px;
+  min-height: 230px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr) 190px;
   gap: 28px;
   align-items: center;
-  grid-column: span 1;
-  padding: clamp(32px, 3.2vw, 54px);
+  grid-column: 1 / -1;
+  padding: clamp(28px, 2.8vw, 42px);
+}
+
+#resultsStage .score-card > div {
+  min-width: 0;
 }
 
 #resultsStage .score-card .eyebrow {
@@ -4045,38 +4049,42 @@ body.is-modal-open {
   display: block;
   margin-top: 12px;
   color: #14262c;
-  font-size: clamp(64px, 6vw, 104px);
-  line-height: 0.9;
+  font-size: clamp(48px, 4.8vw, 74px);
+  line-height: 1;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 #resultsStage .score-card span {
   display: block;
-  max-width: 620px;
+  max-width: 860px;
   margin-top: 18px;
   color: #5b6b70;
-  font-size: clamp(18px, 1.45vw, 24px);
+  font-size: clamp(17px, 1.25vw, 21px);
   font-weight: 650;
   line-height: 1.45;
 }
 
 #resultsStage .score-ring {
-  width: min(100%, 230px);
+  width: 178px;
   aspect-ratio: 1;
   height: auto;
   display: grid;
   place-items: center;
   border-radius: 50%;
   color: #ffffff;
-  font-size: clamp(42px, 4vw, 64px);
+  font-size: 42px;
   font-weight: 900;
   background:
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.14) 0 42%, transparent 43%),
+    radial-gradient(circle at 50% 50%, #2e6970 0 50%, transparent 51%),
     conic-gradient(#46a3b6 0 var(--score-angle, 132deg), rgba(0, 107, 128, 0.18) var(--score-angle, 132deg) 360deg);
-  box-shadow: inset 0 0 0 20px #2e6970, 0 22px 48px rgba(20, 51, 65, 0.18);
+  box-shadow: inset 0 0 0 16px #2e6970, 0 18px 40px rgba(20, 51, 65, 0.16);
 }
 
 #resultsStage .criteria-card {
+  grid-column: 1 / -1;
+  max-height: none !important;
+  overflow: visible !important;
   padding: clamp(28px, 2.6vw, 42px);
 }
 
@@ -4090,12 +4098,12 @@ body.is-modal-open {
 
 #resultsStage #criteriaList {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
 #resultsStage .criterion {
-  min-height: 176px;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr;
   align-content: start;
@@ -4130,8 +4138,8 @@ body.is-modal-open {
 }
 
 #resultsStage .criterion small {
-  max-height: none;
-  overflow: visible;
+  max-height: none !important;
+  overflow: visible !important;
   color: #607277;
   font-size: 13px;
   line-height: 1.4;
@@ -4141,6 +4149,15 @@ body.is-modal-open {
   align-self: end;
   height: 10px;
   background: rgba(0, 107, 128, 0.16);
+}
+
+#resultsStage .criteria-card,
+#resultsStage .list-card,
+#resultsStage .ai-risk-card,
+#resultsStage .recommendation-section {
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto;
 }
 
 #resultsStage .list-card {
