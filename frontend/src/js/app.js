@@ -711,29 +711,36 @@ function renderDocumentReview() {
 
 function renderRemark() {
   const remarks = state.remarks || documentRemarks;
-  const remark = remarks[state.activeRemark] || remarks[0];
-  const quote = remark.quote?.trim();
   elements.remarkContent.innerHTML = `
-    <span class="remark-meta">${remark.section || "Фрагмент документа"} · ${remark.severity || "важно"}</span>
-    <h3>${remark.title || remark.comment || "Замечание"}</h3>
-    ${quote ? `<blockquote>${quote}</blockquote>` : ""}
-    <div class="remark-card__body">
-      <div>
-        <span>Что не так</span>
-        <p>${remark.comment || remark.title || "Фрагмент требует уточнения."}</p>
-      </div>
-      <div>
-        <span>Что сделать</span>
-        <p>${remark.recommendation || "Уточнить этот пункт и добавить проверяемые основания."}</p>
-      </div>
+    <div class="remark-list">
+      ${remarks
+        .map((remark, index) => {
+          const quote = remark.quote?.trim();
+          return `
+            <article class="remark-item">
+              <div class="remark-item__head">
+                <span class="remark-index">${index + 1}</span>
+                <span class="remark-meta">${remark.section || "Фрагмент документа"} · ${remark.severity || "важно"}</span>
+              </div>
+              <h3>${remark.title || remark.comment || "Замечание"}</h3>
+              ${quote ? `<blockquote>${quote}</blockquote>` : ""}
+              <div class="remark-card__body">
+                <div>
+                  <span>Что не так</span>
+                  <p>${remark.comment || remark.title || "Фрагмент требует уточнения."}</p>
+                </div>
+                <div>
+                  <span>Что сделать</span>
+                  <p>${remark.recommendation || "Уточнить этот пункт и добавить проверяемые основания."}</p>
+                </div>
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
     </div>
   `;
-  elements.remarkTabs.innerHTML = remarks
-    .map(
-      (_, index) =>
-        `<button class="remark-tab ${index === state.activeRemark ? "is-active" : ""}" type="button" data-remark="${index}">${index + 1}</button>`,
-    )
-    .join("");
+  elements.remarkTabs.innerHTML = "";
 }
 
 function getRecommendationNumber(priority) {
