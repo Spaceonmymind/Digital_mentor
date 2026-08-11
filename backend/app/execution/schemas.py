@@ -384,9 +384,9 @@ class DemoAgentOutput(BaseModel):
         if not self.summary.strip():
             raise ValueError("summary is required")
         self.summary = self.summary[:500]
-        self.strengths = self.strengths[:3]
-        self.issues = self.issues[:3]
-        self.recommendations = self.recommendations[:3]
+        self.strengths = self.strengths[:2]
+        self.issues = self.issues[:2]
+        self.recommendations = self.recommendations[:2]
         return self
 
 

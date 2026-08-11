@@ -459,11 +459,11 @@ function resetScenario() {
 }
 
 const processingAgents = [
-  { code: "A-15", title: "Критика", description: "ищет главное противоречие" },
-  { code: "A-16", title: "Экономика", description: "проверяет модель и пороги" },
-  { code: "A-17", title: "Архитектура", description: "смотрит механизм решения" },
-  { code: "A-28", title: "Риски", description: "ловит слабые места" },
-  { code: "A-01", title: "Синтез", description: "собирает итоговый ответ" },
+  { title: "Проблема", description: "проверяю актуальность и противоречие" },
+  { title: "Экономика", description: "смотрю модель, расчеты и пороги" },
+  { title: "Архитектура", description: "проверяю реализуемость решения" },
+  { title: "Риски", description: "ищу слабые места и ограничения" },
+  { title: "Итог", description: "собираю понятное заключение" },
 ];
 
 function renderAnalysisSteps(activeIndex = -1, progress = 0) {
@@ -479,7 +479,7 @@ function renderAnalysisSteps(activeIndex = -1, progress = 0) {
       return `
         <div class="analysis-step is-${status}">
           <div class="analysis-step__indicator">${indicator}</div>
-          <strong>${agent.code} · ${agent.title}</strong>
+          <strong>${agent.title}</strong>
           <p>${agent.description}</p>
           <span class="analysis-step__state">${label}</span>
         </div>
@@ -497,8 +497,8 @@ function processingAgentIndex(progress = 0, currentStep = "") {
 
 function processingStepLabel(progress = 0, currentStep = "") {
   if (progress >= 100 || currentStep === "completed") return "Завершено";
-  if (currentStep === "demo_final" || progress >= 88) return "Финальный синтез A-01";
-  if (currentStep === "demo_agents" || progress >= 25) return "Параллельная работа A-15, A-16, A-17, A-28";
+  if (currentStep === "demo_final" || progress >= 88) return "Формирование итогового вывода";
+  if (currentStep === "demo_agents" || progress >= 25) return "Параллельная проверка ключевых разделов";
   if (currentStep === "extracting" || currentStep === "preparing") return "Подготовка текста";
   return "Запуск анализа";
 }
