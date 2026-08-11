@@ -472,6 +472,14 @@ function processingAgentIndex(progress = 0, currentStep = "") {
   return 0;
 }
 
+function processingStepLabel(progress = 0, currentStep = "") {
+  if (progress >= 100 || currentStep === "completed") return "Завершено";
+  if (currentStep === "demo_final" || progress >= 88) return "Финальный синтез A-01";
+  if (currentStep === "demo_agents" || progress >= 25) return "Параллельная работа A-15, A-16, A-17, A-28";
+  if (currentStep === "extracting" || currentStep === "preparing") return "Подготовка текста";
+  return "Запуск анализа";
+}
+
 function renderResults(result) {
   const normalized = normalizeResult(result);
   state.result = normalized;
@@ -840,7 +848,7 @@ async function startAnalysis() {
       const progress = Math.max(0, Math.min(100, status.progress || 0));
       elements.processingPercent.textContent = `${progress}%`;
       elements.processingPhase.textContent = status.message || "Агенты анализируют документ";
-      elements.processingLiveStep.textContent = status.current_step || "analysis";
+      elements.processingLiveStep.textContent = processingStepLabel(progress, status.current_step || "");
       elements.overallProgressBar.style.width = `${progress}%`;
       const shouldSpeak = [20, 48, 72, 95].some((mark) => Math.abs(progress - mark) <= 3);
       const stepKey = status.current_step || status.message;
