@@ -708,13 +708,21 @@ function renderDocumentReview() {
 function renderRemark() {
   const remarks = state.remarks || documentRemarks;
   const remark = remarks[state.activeRemark] || remarks[0];
+  const quote = remark.quote?.trim();
   elements.remarkContent.innerHTML = `
-    <span class="remark-meta">Страница ${remark.page || remark.page_number || 1} · ${remark.section || "Фрагмент документа"} · ${remark.severity || "warning"}</span>
+    <span class="remark-meta">${remark.section || "Фрагмент документа"} · ${remark.severity || "важно"}</span>
     <h3>${remark.title || remark.comment || "Замечание"}</h3>
-    <p><strong>Цитата:</strong> ${remark.quote}</p>
-    <p><strong>Пояснение:</strong> ${remark.comment || "Фрагмент требует уточнения."}</p>
-    <p><strong>Рекомендация:</strong> ${remark.recommendation}</p>
-    <p><strong>Приоритет:</strong> ${remark.priority || "Средний"}</p>
+    ${quote ? `<blockquote>${quote}</blockquote>` : ""}
+    <div class="remark-card__body">
+      <div>
+        <span>Что не так</span>
+        <p>${remark.comment || remark.title || "Фрагмент требует уточнения."}</p>
+      </div>
+      <div>
+        <span>Что сделать</span>
+        <p>${remark.recommendation || "Уточнить этот пункт и добавить проверяемые основания."}</p>
+      </div>
+    </div>
   `;
   elements.remarkTabs.innerHTML = remarks
     .map(

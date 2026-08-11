@@ -1359,8 +1359,14 @@ button {
 
 .analysis-step__state {
   justify-self: end;
+  align-self: center;
   color: var(--green-dark);
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0, 116, 128, 0.08);
   font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -4206,34 +4212,131 @@ body.is-modal-open {
 
 #resultsStage .document-review {
   padding-top: clamp(28px, 2.6vw, 42px);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 201, 106, 0.2), transparent 28%),
+    linear-gradient(135deg, #ffffff, #f3fbfc);
 }
 
 #resultsStage .document-review__grid {
-  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 1.08fr);
-  gap: 18px;
+  grid-template-columns: minmax(300px, 0.82fr) minmax(420px, 1fr);
+  gap: 22px;
+  align-items: stretch;
 }
 
 #resultsStage .document-page,
 #resultsStage .remark-card {
   max-height: none;
   overflow: visible;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(0, 107, 128, 0.1);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 #resultsStage .document-page {
   min-height: auto;
-  max-height: 420px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
+  padding: 24px;
+}
+
+#resultsStage .document-page h3 {
+  margin-top: 0;
+  color: #14262c;
+  font-size: 26px;
+}
+
+#resultsStage .document-page p {
+  color: #3d4b4f;
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+#resultsStage .document-page .is-highlighted {
+  border: 0;
+  border-radius: 18px;
+  background: #fff8cf;
 }
 
 #resultsStage .remark-card {
-  padding: 24px;
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: clamp(24px, 2.2vw, 34px);
+  background:
+    linear-gradient(135deg, rgba(0, 107, 128, 0.08), transparent 42%),
+    #ffffff;
+}
+
+#resultsStage .remark-meta {
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: var(--green-dark);
+  background: rgba(0, 107, 128, 0.1);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#resultsStage .remark-card h3 {
+  margin: 0;
+  color: #14262c;
+  font-size: clamp(24px, 2vw, 34px);
+  line-height: 1.12;
+}
+
+#resultsStage .remark-card blockquote {
+  margin: 0;
+  padding: 16px 18px;
+  border-left: 5px solid #2f7f8c;
+  border-radius: 16px;
+  color: #33474d;
+  background: rgba(0, 107, 128, 0.07);
+  line-height: 1.55;
+}
+
+#resultsStage .remark-card__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+#resultsStage .remark-card__body div {
+  padding: 16px;
+  border: 1px solid rgba(0, 107, 128, 0.1);
+  border-radius: 18px;
+  background: rgba(246, 252, 253, 0.9);
+}
+
+#resultsStage .remark-card__body span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--brand-red);
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 #resultsStage .remark-card p {
   max-height: none;
   overflow: visible;
+  margin: 0;
+  color: #40545a;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+#resultsStage .remark-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+#resultsStage .remark-tab {
+  min-width: 42px;
+  height: 42px;
+  border-radius: 14px;
 }
 
 #resultsStage .recommendation-grid {
@@ -4271,6 +4374,10 @@ body.is-modal-open {
   #resultsStage #criteriaList,
   #resultsStage .document-review__grid,
   #resultsStage .recommendation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  #resultsStage .remark-card__body {
     grid-template-columns: 1fr;
   }
 }
