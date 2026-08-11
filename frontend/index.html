@@ -350,21 +350,51 @@
                     </button>
                   </form>
                 </section>
-                <section class="card report-card">
-                  <div class="section-heading">
-                    <span data-icon="download"></span>
+                <section class="card report-card detailed-report-card">
+                  <div class="detailed-report-hero">
                     <div>
-                      <h2>Итоговый отчет</h2>
+                      <p class="eyebrow">Подробный разбор</p>
+                      <h2>Большой отчет собирается отдельно</h2>
+                      <p id="detailedReportStatusText">После быстрого результата ментор готовит подробный PDF с примерами из текста, доказательствами и планом доработки.</p>
+                    </div>
+                    <div class="report-orb" aria-hidden="true">
+                      <span data-icon="file-text"></span>
                     </div>
                   </div>
-                  <button class="button" type="button" id="reportButton">
-                    <span data-icon="download"></span>
-                    Скачать отчет
-                  </button>
-                  <button class="button button--secondary" type="button" id="finishDemoButton">
-                    <span data-icon="check-circle-2"></span>
-                    Завершить
-                  </button>
+
+                  <div class="report-flow" id="detailedReportFlow">
+                    <div class="report-flow__item is-active">
+                      <span data-icon="search-check"></span>
+                      <strong>Цитаты</strong>
+                      <small>ищем фрагменты</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="layers-3"></span>
+                      <strong>Разбор</strong>
+                      <small>структурируем выводы</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="chart-no-axes-column"></span>
+                      <strong>Рекомендации</strong>
+                      <small>собираем план</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="file-down"></span>
+                      <strong>PDF</strong>
+                      <small>готовим файл</small>
+                    </div>
+                  </div>
+
+                  <div class="report-card__actions">
+                    <button class="button button--large" type="button" id="reportButton">
+                      <span data-icon="download"></span>
+                      Скачать подробный отчет
+                    </button>
+                    <button class="button button--secondary" type="button" id="finishDemoButton">
+                      <span data-icon="check-circle-2"></span>
+                      Завершить
+                    </button>
+                  </div>
                 </section>
                 <section class="card history-card">
                   <div class="section-heading">

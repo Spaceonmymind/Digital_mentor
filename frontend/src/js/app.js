@@ -107,6 +107,8 @@ const elements = {
   modeBanner: document.getElementById("modeBanner"),
   demoDocumentButton: document.getElementById("demoDocumentButton"),
   reportButton: document.getElementById("reportButton"),
+  detailedReportStatusText: document.getElementById("detailedReportStatusText"),
+  detailedReportFlow: document.getElementById("detailedReportFlow"),
   finishDemoButton: document.getElementById("finishDemoButton"),
   finalReportButton: document.getElementById("finalReportButton"),
   finalResetButton: document.getElementById("finalResetButton"),
@@ -299,11 +301,32 @@ function setDetailedReportButtons(status = "not_started") {
   const buttons = [elements.reportButton, elements.summaryReportButton, elements.finalReportButton].filter(Boolean);
   const ready = status === "completed";
   const failed = status === "failed";
-  const label = ready ? "Скачать подробный отчет" : failed ? "Повторить подготовку отчета" : "Подробный отчет готовится...";
+  const label = ready ? "Скачать подробный отчет" : failed ? "Повторить подготовку отчета" : "Отчет готовится";
   buttons.forEach((button) => {
     button.disabled = !ready && !failed;
-    button.textContent = label;
+    const icon = button.querySelector("[data-icon]");
+    button.textContent = "";
+    if (icon) button.append(icon);
+    button.append(document.createTextNode(label));
   });
+  if (elements.detailedReportStatusText) {
+    const textByStatus = {
+      not_started: "Подробный PDF появится после быстрого результата. Он будет собран из сохраненного анализа и извлеченного текста документа.",
+      running: "Готовлю подробный отчет: вытаскиваю примеры из текста, собираю доказательства и оформляю рекомендации.",
+      completed: "Подробный отчет готов. Его можно скачать без повторного запуска анализа.",
+      failed: "Подробный отчет не собрался. Можно запустить подготовку еще раз.",
+    };
+    elements.detailedReportStatusText.textContent = textByStatus[status] || textByStatus.not_started;
+  }
+  if (elements.detailedReportFlow) {
+    const items = [...elements.detailedReportFlow.querySelectorAll(".report-flow__item")];
+    const activeIndex = status === "completed" ? items.length : status === "running" ? 2 : status === "failed" ? 0 : 1;
+    items.forEach((item, index) => {
+      item.classList.toggle("is-active", status === "running" && index === activeIndex);
+      item.classList.toggle("is-complete", status === "completed" || (status === "running" && index < activeIndex));
+      item.classList.toggle("is-failed", status === "failed" && index === 0);
+    });
+  }
 }
 
 async function refreshDetailedReportStatus() {
