@@ -4244,6 +4244,10 @@ body.is-modal-open {
 }
 
 #resultsStage .document-review {
+  max-height: none !important;
+  min-height: 0;
+  overflow: visible !important;
+  overscroll-behavior: auto;
   padding-top: clamp(28px, 2.6vw, 42px);
   background:
     radial-gradient(circle at 100% 0%, rgba(255, 201, 106, 0.2), transparent 28%),
@@ -4251,6 +4255,8 @@ body.is-modal-open {
 }
 
 #resultsStage .document-review__grid {
+  min-height: 0;
+  overflow: visible;
   display: grid;
   grid-template-columns: 1fr;
   gap: 18px;
