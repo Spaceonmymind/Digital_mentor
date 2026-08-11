@@ -137,7 +137,7 @@ class FakeStartupLLM:
         )
 
     async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
-        self.calls.append({"model": model, "response_model": response_model.__name__, "user_prompt": user_prompt})
+        self.calls.append({"model": model, "response_model": response_model.__name__, "user_prompt": user_prompt, **kwargs})
         if response_model is WorkerIndicatorOutput:
             output = WorkerIndicatorOutput(
                 status="partially_satisfied",
@@ -339,6 +339,8 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert [call["model"] for call in llm.calls].count(CRITIC) == 2
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
     assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
+    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"} == {900}
+    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1200}
     assert metrics["mode"] == "demo"
     assert metrics["agent_time_a15"] >= 0
 
