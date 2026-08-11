@@ -753,6 +753,7 @@ async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeyp
     class FakeChatLLM:
         async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
             captured["user_prompt"] = user_prompt
+            captured["max_completion_tokens"] = kwargs.get("max_completion_tokens")
             return LLMResult(
                 output=response_model(answer="Покажите фрагмент про сравнительный подход и добавьте критерии проверки."),
                 provider_response_id="chat-test",
@@ -800,3 +801,4 @@ async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeyp
     assert response.status_code == 200, response.text
     assert "Релевантные фрагменты исходного документа" in captured["user_prompt"]
     assert "Для анализа был использован сравнительный подход" in captured["user_prompt"]
+    assert captured["max_completion_tokens"] == 2200
