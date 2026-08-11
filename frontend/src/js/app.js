@@ -9,7 +9,7 @@ import {
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
 import { FRONTEND_MOCK_MODE } from "./config.js";
 import { renderIcons } from "./icons.js";
-import { cancelAnalysis, createReport, getDetailedReportStatus, getPublicConfig, startDetailedReport } from "./api.js";
+import { cancelAnalysis, createReport, getDetailedReportStatus, getPublicConfig, startDetailedReport, synthesizeAnalysisSpeech } from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
@@ -31,6 +31,7 @@ const state = {
   sidebarCollapsed: true,
   publicConfig: { demo_mode: false, frontend_mock_mode: false, tts_mode: "browser" },
   speechToken: 0,
+  ttsStatus: "idle",
   uiState: "welcome",
   result: null,
   checkedRecommendations: new Set(),
@@ -176,7 +177,7 @@ const mascot = new MascotController({
   wave: elements.voiceWave,
 });
 
-function setMentor(status, message) {
+function setMentor(status, message, speechOptions = {}) {
   const statusLabels = {
     idle: "Ожидает документ",
     greeting: "Приветствует",
@@ -187,7 +188,7 @@ function setMentor(status, message) {
     error: "Требуется действие",
   };
   mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message });
-  speakMentor(message);
+  speakMentor(message, false, speechOptions);
 }
 
 function isSpeechSupported() {
@@ -203,12 +204,51 @@ function enableSpeech() {
   speechService.enable();
 }
 
-function speakMentor(message, force = false) {
+function setTtsStatus(status) {
+  state.ttsStatus = status;
+  updateSoundButton();
+}
+
+async function prepareMentorVoice(analysisId) {
+  if (!analysisId || FRONTEND_MOCK_MODE || state.publicConfig.tts_mode !== "remote") return;
+  setTtsStatus("generating");
+  try {
+    const result = await synthesizeAnalysisSpeech(analysisId);
+    if (result.status === "ready") {
+      setTtsStatus("ready");
+    } else if (result.status === "fallback") {
+      setTtsStatus("fallback");
+    } else {
+      setTtsStatus("failed");
+    }
+  } catch {
+    setTtsStatus("failed");
+  }
+}
+
+function speakMentor(message, force = false, options = {}) {
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
   const token = ++state.speechToken;
   speechService.speak(message, {
     force,
+    analysisId: options.analysisId,
+    onPrepare: () => {
+      if (token !== state.speechToken) return;
+      setTtsStatus("generating");
+      mascot.setMascotState({ state: "speaking", message: "Подготавливаю голос..." });
+    },
+    onFallback: () => {
+      if (token !== state.speechToken) return;
+      setTtsStatus("fallback");
+      mascot.setMascotState({ state: "speaking", message: "Используется резервная озвучка." });
+    },
+    onUnavailable: () => {
+      if (token !== state.speechToken) return;
+      setTtsStatus("failed");
+      mascot.setMascotState({ state: "success", message: "Не удалось создать голосовое резюме." });
+    },
     onStart: () => {
+      setTtsStatus("ready");
       if (token === state.speechToken) mascot.setMascotState({ state: "speaking", message });
     },
     onEnd: () => {
@@ -227,7 +267,14 @@ function stopSpeech() {
 }
 
 function updateSoundButton() {
-  elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${state.sound ? "Озвучивание включено" : "Озвучивание выключено"}`;
+  const labels = {
+    idle: state.sound ? "Озвучивание включено" : "Озвучивание выключено",
+    generating: "Подготавливаю голос...",
+    ready: state.sound ? "Озвучивание включено" : "Голос готов",
+    fallback: "Используется резервная озвучка",
+    failed: "Повторить",
+  };
+  elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${labels[state.ttsStatus] || labels.idle}`;
   elements.soundToggle.classList.toggle("is-active", state.sound);
   renderIcons();
 }
@@ -439,6 +486,7 @@ function resetScenario() {
   state.checkedRecommendations = new Set();
   state.activeRecommendation = null;
   state.lastSpokenStep = "";
+  state.ttsStatus = "idle";
   state.detailedReport = null;
   state.detailedReportPoll = null;
   setDetailedReportButtons("not_started");
@@ -920,9 +968,14 @@ async function startAnalysis() {
     renderDirections();
     renderChat();
     startDetailedReportLoading();
+    if (!state.sound) prepareMentorVoice(state.analysisId);
     showStage("summary");
     const normalized = normalizeResult(result);
-    setMentor("success", normalized.spokenSummary || `Анализ завершен. Текущая стадия работы: ${normalized.currentStage || "не определена"}.`);
+    setMentor(
+      "success",
+      normalized.spokenSummary || `Анализ завершен. Текущая стадия работы: ${normalized.currentStage || "не определена"}.`,
+      normalized.spokenSummary ? { analysisId: state.analysisId } : {},
+    );
   } catch (error) {
     showError("Не удалось обработать документ", error.message || "Проверьте, что файл не поврежден и содержит текстовый слой.", error.body?.error?.request_id);
   }
@@ -1222,7 +1275,7 @@ function bindEvents() {
         }
         state.lastSpokenMessage = "";
         showNotification("Звук включен. Сейчас Финик произнесет реплику.");
-        speakMentor(elements.mentorMessage.textContent, true);
+        speakMentor(elements.mentorMessage.textContent, true, { analysisId: state.analysisId });
       } else {
         stopSpeech();
         showNotification("Звук выключен.");

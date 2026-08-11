@@ -1,4 +1,4 @@
-import { synthesizeSpeech } from "../api.js";
+import { synthesizeAnalysisSpeech, synthesizeSpeech } from "../api.js";
 
 
 export class RemoteTtsSpeechService {
@@ -23,26 +23,33 @@ export class RemoteTtsSpeechService {
     this.fallback?.loadVoices();
   }
 
-  async speak(text, { force = false, onStart, onEnd } = {}) {
+  async speak(text, { force = false, analysisId, onPrepare, onFallback, onUnavailable, onStart, onEnd } = {}) {
     if (!this.ready || this.failed) {
       return this.fallback?.speak(text, { force, onStart, onEnd });
     }
     this.stop();
     try {
-      const result = await synthesizeSpeech({ text, voice_id: "mentor-default" });
+      onPrepare?.();
+      const result = analysisId ? await synthesizeAnalysisSpeech(analysisId) : await synthesizeSpeech({ text, voice_id: "mentor-default" });
+      if (result.status === "fallback" || !result.audio_url) {
+        this.onFallback?.();
+        onFallback?.();
+        return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
+      }
       this.audio = new Audio(result.audio_url);
       this.audio.onplay = () => onStart?.();
       this.audio.onended = () => onEnd?.();
       this.audio.onerror = () => {
         this.failed = true;
         this.onFallback?.();
-        this.fallback?.speak(text, { force: true, onStart, onEnd });
+        onFallback?.();
+        this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
       };
       await this.audio.play();
     } catch (error) {
-      this.failed = true;
       this.onFallback?.();
-      return this.fallback?.speak(text, { force: true, onStart, onEnd });
+      onUnavailable?.();
+      return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
     }
   }
 

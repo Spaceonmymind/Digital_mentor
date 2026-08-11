@@ -95,6 +95,13 @@ export async function synthesizeSpeech(payload) {
   return parseResponse(response);
 }
 
+export async function synthesizeAnalysisSpeech(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/tts/analyses/${analysisId}`, {
+    method: "POST",
+  });
+  return parseResponse(response);
+}
+
 
 export async function createReport(analysisId) {
   const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/reports`, {

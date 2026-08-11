@@ -7,8 +7,13 @@ class TtsRequest(BaseModel):
 
 
 class TtsResponse(BaseModel):
-    audio_id: str
+    status: str = "ready"
+    audio_id: str | None
     format: str
     duration_ms: int
-    audio_url: str
+    audio_url: str | None
     provider: str
+    source: str = "polza"
+    attempts: int = 0
+    latency_ms: int = 0
+    error_code: str | None = None

@@ -704,15 +704,15 @@ async def test_delete_document(client):
 
 
 @pytest.mark.asyncio
-async def test_tts_stub(client):
+async def test_tts_falls_back_without_provider(client):
     response = await client.post("/api/v1/tts", json={"text": "Анализ завершен", "voice_id": "mentor-default"})
     assert response.status_code == 200, response.text
     payload = response.json()
+    assert payload["status"] == "fallback"
     assert payload["format"] == "mp3"
-    assert payload["provider"] == "stub"
-    audio_response = await client.get(payload["audio_url"])
-    assert audio_response.status_code == 200
-    assert audio_response.content.startswith(b"ID3")
+    assert payload["provider"] == "browser"
+    assert payload["source"] == "browser"
+    assert payload["audio_url"] is None
 
 
 @pytest.mark.asyncio
