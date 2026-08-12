@@ -252,7 +252,7 @@ function speakMentor(message, force = false, options = {}) {
     onUnavailable: () => {
       if (token !== state.speechToken) return;
       setTtsStatus("failed");
-      mascot.setMascotState({ state: "success", message: "Не удалось создать голосовое резюме." });
+      mascot.setMascotState({ state: "success", message: "Не удалось создать озвучку." });
     },
     onStart: () => {
       setTtsStatus("ready");

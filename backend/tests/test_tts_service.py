@@ -9,6 +9,7 @@ from app.db.session import async_session_factory
 from app.core.config import settings
 from app.services.storage import DocumentStorage
 from app.services.tts_service import TtsService
+from app.schemas.tts import TtsRequest
 
 
 async def _create_completed_analysis(session, spoken_summary: str = "Короткое голосовое резюме.") -> Analysis:
@@ -107,3 +108,12 @@ def test_tts_rejects_json_saved_as_mp3(tmp_path):
     path.write_text('{"audio":"not-an-mp3"}')
 
     assert TtsService()._is_valid_mp3_file(path) is False
+
+
+def test_tts_dialog_request_accepts_long_mentor_answer():
+    text = "Длинный ответ ментора. " * 70
+
+    request = TtsRequest(text=text)
+
+    assert len(request.text) > 700
+    assert TtsService()._normalize_text(request.text, settings.tts_dialog_max_text_length) == request.text.strip()

@@ -72,7 +72,7 @@ class TtsService:
         return await self._generate(spoken_summary, audio_id, path)
 
     async def synthesize_text(self, text: str, audio_id: str | None = None) -> TtsGenerationResult:
-        normalized = self._normalize_text(text)
+        normalized = self._normalize_text(text, settings.tts_dialog_max_text_length)
         if not normalized:
             raise AppError("TTS_TEXT_NOT_FOUND", "Нет текста для озвучивания", status_code=422)
         resolved_audio_id = audio_id or f"tts_{uuid4()}"
@@ -86,13 +86,20 @@ class TtsService:
                 latency_ms=0,
                 duration_ms=self._estimate_duration_ms(path=path),
             )
-        return await self._generate(normalized, resolved_audio_id, path)
+        return await self._generate(normalized, resolved_audio_id, path, max_text_length=settings.tts_dialog_max_text_length)
 
-    async def _generate(self, text: str, audio_id: str, path: Path) -> TtsGenerationResult:
+    async def _generate(
+        self,
+        text: str,
+        audio_id: str,
+        path: Path,
+        *,
+        max_text_length: int | None = None,
+    ) -> TtsGenerationResult:
         if not settings.polza_api_key:
             return self._fallback("TTS_CONFIGURATION_MISSING", attempts=0, latency_ms=0)
 
-        normalized = self._normalize_text(text)
+        normalized = self._normalize_text(text, max_text_length or settings.tts_max_text_length)
         start = perf_counter()
         attempts = 0
         last_error_code = "TTS_PROVIDER_UNAVAILABLE"
@@ -191,9 +198,9 @@ class TtsService:
                 return self._normalize_text(candidate)
         return ""
 
-    def _normalize_text(self, text: str) -> str:
+    def _normalize_text(self, text: str, max_length: int | None = None) -> str:
         normalized = " ".join(text.split()).strip()
-        return normalized[: settings.tts_max_text_length]
+        return normalized[: max_length or settings.tts_max_text_length]
 
     def _decode_audio_response(self, response: httpx.Response) -> bytes:
         content_type = response.headers.get("content-type", "").lower()

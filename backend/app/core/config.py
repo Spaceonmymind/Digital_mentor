@@ -30,6 +30,7 @@ class Settings:
     frontend_mock_mode: bool = _bool_env("FRONTEND_MOCK_MODE", False)
     tts_mode: str = os.getenv("TTS_MODE", "remote")
     tts_max_text_length: int = int(os.getenv("TTS_MAX_TEXT_LENGTH", "700"))
+    tts_dialog_max_text_length: int = int(os.getenv("TTS_DIALOG_MAX_TEXT_LENGTH", "3000"))
     tts_model: str = os.getenv("TTS_MODEL", "openai/gpt-4o-mini-tts")
     tts_voice: str = os.getenv("TTS_VOICE", "verse")
     tts_speed: float = float(os.getenv("TTS_SPEED", "1.3"))
