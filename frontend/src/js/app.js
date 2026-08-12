@@ -188,7 +188,7 @@ function setMentor(status, message, speechOptions = {}) {
     error: "Требуется действие",
   };
   mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message });
-  speakMentor(message, false, speechOptions);
+  return speakMentor(message, false, speechOptions);
 }
 
 function isSpeechSupported() {
@@ -236,7 +236,7 @@ function speakMentor(message, force = false, options = {}) {
     !speechService.hasPrerecorded?.(message)
   ) return;
   const token = ++state.speechToken;
-  speechService.speak(message, {
+  return speechService.speak(message, {
     force,
     analysisId: options.analysisId,
     onPrepare: () => {
@@ -916,9 +916,12 @@ async function askMentor(question) {
 
   try {
     const response = await askMentorApi(state.analysisId, question);
+    const voiceWillPlay = state.sound && state.speechReady && isSpeechSupported();
+    if (voiceWillPlay) typing.textContent = "Подготавливаю голосовой ответ.";
+    await speakMentor(response.answer, false, { remoteText: true });
     typing.remove();
     addMessage("mentor", response.answer);
-    setMentor("success", response.answer, { remoteText: true });
+    setMentor(voiceWillPlay ? "speaking" : "success", response.answer, { silent: true });
   } catch (error) {
     typing.remove();
     const answer = getMentorAnswer(question);
