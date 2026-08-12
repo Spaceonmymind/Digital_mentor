@@ -227,6 +227,7 @@ async function prepareMentorVoice(analysisId) {
 }
 
 function speakMentor(message, force = false, options = {}) {
+  if (options.silent) return;
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
   if (
     state.publicConfig.tts_mode === "remote" &&
@@ -1084,6 +1085,7 @@ function beginWork() {
   setMentor(
     "greeting",
     "Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.",
+    { silent: true },
   );
 }
 

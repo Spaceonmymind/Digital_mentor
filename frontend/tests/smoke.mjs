@@ -32,6 +32,8 @@ assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
 assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");
 assert(app.includes('response.answer, { remoteText: true }'), "Mentor chat must request remote TTS");
 assert(app.includes("speechService.hasPrerecorded?.(message)"), "Remote TTS must allow prerecorded standard phrases");
+assert(app.includes("if (options.silent) return;"), "Mentor speech must support silent UI transitions");
+assert(app.includes("{ silent: true }"), "Begin-work transition must not repeat the greeting");
 assert(speech.includes("PRERECORDED_SPEECH"), "Missing prerecorded speech mapping");
 assert(speech.includes("/src/assets/audio/greeting.mp3"), "Missing prerecorded greeting mapping");
 for (const audioFile of speech.matchAll(/\/src\/assets\/audio\/([^"']+\.mp3)/g)) {
