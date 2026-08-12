@@ -30,6 +30,8 @@ assert(app.includes("addHistoryItem"), "Missing local history save");
 assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");
 assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
 assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");
+assert(app.includes('response.answer, { remoteText: true }'), "Mentor chat must request remote TTS");
+assert(app.includes("!options.analysisId && !options.remoteText"), "Remote TTS must allow explicit dialog text");
 assert(mascot.includes("fallbackGif"), "Missing mascot GIF fallback");
 assert(mascot.includes("is-mascot-placeholder"), "Missing mascot CSS placeholder fallback");
 assert(existsSync(resolve(root, "../demo/sample-document.pdf")), "Missing sample PDF");

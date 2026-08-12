@@ -228,7 +228,7 @@ async function prepareMentorVoice(analysisId) {
 
 function speakMentor(message, force = false, options = {}) {
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
-  if (state.publicConfig.tts_mode === "remote" && !options.analysisId) return;
+  if (state.publicConfig.tts_mode === "remote" && !options.analysisId && !options.remoteText) return;
   const token = ++state.speechToken;
   speechService.speak(message, {
     force,
@@ -912,7 +912,7 @@ async function askMentor(question) {
     const response = await askMentorApi(state.analysisId, question);
     typing.remove();
     addMessage("mentor", response.answer);
-    setMentor("success", response.answer);
+    setMentor("success", response.answer, { remoteText: true });
   } catch (error) {
     typing.remove();
     const answer = getMentorAnswer(question);
@@ -1204,7 +1204,7 @@ function bindEvents() {
       fallbackText: direction.text,
     });
     elements.directionResult.textContent = answer;
-    setMentor("speaking", answer);
+    setMentor("speaking", answer, { remoteText: true });
   });
 
   elements.recommendationPlan.addEventListener("click", (event) => {
