@@ -440,11 +440,80 @@
         </section>
 
         <section class="page" id="aboutPage">
-          <section class="card empty-page">
-            <span data-icon="info"></span>
-            <h2>О проекте</h2>
-            <p>Цифровой ментор помогает автору увидеть сильные стороны работы, замечания, рекомендации и направления дальнейшего развития.</p>
-          </section>
+          <div class="about-shell">
+            <section class="about-hero">
+              <div class="about-hero__copy">
+                <p class="about-kicker"><span></span> Мультиагентная экспертная система</p>
+                <h2>Не один чат-бот.<br /><em>Цифровой консилиум</em> для проектных работ.</h2>
+                <p class="about-lead">Digital Mentor разбирает ВКР и проектные документы как команда независимых экспертов: каждый смотрит на свою часть работы, спорит с допущениями и передает выводы финальному ментору. Пользователь получает не сырой ответ нейросети, а собранную позицию с оценками, возражениями и следующим шагом.</p>
+                <div class="about-hero__badges">
+                  <span><span data-icon="shield-check"></span> Доказательно</span>
+                  <span><span data-icon="users"></span> Независимые роли</span>
+                  <span><span data-icon="messages-square"></span> Один понятный голос</span>
+                </div>
+              </div>
+              <div class="about-orbit" aria-label="Схема мультиагентного анализа">
+                <div class="about-orbit__ring"></div>
+                <div class="about-orbit__core"><strong>A-01</strong><span>Финальный<br />ментор</span></div>
+                <span class="about-orbit__agent about-orbit__agent--one">Проблема</span>
+                <span class="about-orbit__agent about-orbit__agent--two">Экономика</span>
+                <span class="about-orbit__agent about-orbit__agent--three">Архитектура</span>
+                <span class="about-orbit__agent about-orbit__agent--four">Риски</span>
+              </div>
+            </section>
+
+            <section class="about-metrics" aria-label="Цифры проекта">
+              <article><strong>9</strong><span>экспертных ролей<br />в методологии</span></article>
+              <article><strong>5</strong><span>агентов в быстром<br />demo-проходе</span></article>
+              <article><strong>3</strong><span>семейства моделей<br />с разными задачами</span></article>
+              <article><strong>1</strong><span>внешний голос<br />финального ментора</span></article>
+            </section>
+
+            <section class="about-section">
+              <div class="about-section__heading">
+                <div><p class="eyebrow">Как это работает</p><h3>От документа до решения</h3></div>
+                <p>Система не отправляет файл «как есть» одной модели. Текст извлекается локально, делится на смысловые блоки и проходит несколько специализированных проверок.</p>
+              </div>
+              <div class="about-pipeline">
+                <article><span class="about-step">01</span><div class="about-icon"><span data-icon="file-text"></span></div><h4>Документ</h4><p>PDF или DOCX проверяется, сохраняется и локально превращается в структурированный текст.</p></article>
+                <article><span class="about-step">02</span><div class="about-icon"><span data-icon="scan-search"></span></div><h4>Контекст</h4><p>Система выделяет проблему, решение, архитектуру, экономику, риски и заключение.</p></article>
+                <article><span class="about-step">03</span><div class="about-icon"><span data-icon="users"></span></div><h4>Независимый разбор</h4><p>Профильные агенты параллельно проверяют разные стороны проекта и ищут слабые допущения.</p></article>
+                <article><span class="about-step">04</span><div class="about-icon"><span data-icon="sparkles"></span></div><h4>Синтез</h4><p>Финальный ментор сопоставляет позиции агентов и формирует единый понятный вывод.</p></article>
+                <article><span class="about-step">05</span><div class="about-icon"><span data-icon="route"></span></div><h4>Действие</h4><p>Пользователь получает баллы, возражения, рекомендации, PDF и продолжает разбор в диалоге.</p></article>
+              </div>
+            </section>
+
+            <section class="about-section about-section--agents">
+              <div class="about-section__heading">
+                <div><p class="eyebrow">Команда анализа</p><h3>Каждый агент отвечает за свою оптику</h3></div>
+                <p>Роли не дублируют друг друга. Их задача — независимо проверить работу, а не согласиться с первым правдоподобным ответом.</p>
+              </div>
+              <div class="about-agents">
+                <article class="about-agent about-agent--lead"><span>Финальный синтез</span><h4>Энгельс · главный ментор</h4><p>Собирает конфликтующие выводы, выбирает главные возражения и говорит с пользователем от лица всей системы.</p><small>GPT · final expert</small></article>
+                <article class="about-agent"><span>Критический анализ</span><h4>Анти-Дюринг</h4><p>Проверяет проблему, решение, заявленные свойства и главное противоречие.</p><small>Mistral · быстрый аналитик</small></article>
+                <article class="about-agent"><span>Красная команда</span><h4>Экономический критик</h4><p>Ищет слабые финансовые допущения, проверяет модель выручки и пороги go/no-go.</p><small>Claude · критик</small></article>
+                <article class="about-agent"><span>Инженерная проверка</span><h4>Архитектор-скептик</h4><p>Разбирает компоненты, данные, реализуемость и отказные сценарии решения.</p><small>Mistral · аналитик</small></article>
+                <article class="about-agent"><span>Проверка внедрения</span><h4>Скептический клиент</h4><p>Смотрит на ограничения, злоупотребления, риски эксплуатации и реальную ценность.</p><small>Claude · критик</small></article>
+              </div>
+              <div class="about-full-team"><strong>Полный экспертный контур</strong><span>Механизм</span><span>Диагност</span><span>ТРИЗ-аналитик</span><span>Инвестор</span><p>В полном режиме к критикам подключаются последовательные worker-роли и методологические контрольные точки.</p></div>
+            </section>
+
+            <section class="about-models">
+              <div class="about-models__intro"><p class="eyebrow">Разделение ответственности</p><h3>Три модели — три класса задач</h3><p>Система использует Polza.ai как единый API-шлюз, но не назначает одну модель на всё. Это сохраняет специализацию и контролирует стоимость анализа.</p></div>
+              <div class="about-models__grid">
+                <article><span class="model-dot model-dot--mistral"></span><div><strong>Mistral</strong><small>Рабочий анализ</small></div><p>Читает индикаторы и быстро обрабатывает предметные блоки документа.</p></article>
+                <article><span class="model-dot model-dot--claude"></span><div><strong>Claude</strong><small>Критика и диалог</small></div><p>Оспаривает выводы, проверяет риски и отвечает на вопросы по сохраненному результату.</p></article>
+                <article><span class="model-dot model-dot--gpt"></span><div><strong>GPT</strong><small>Финальный эксперт</small></div><p>Используется точечно: превращает технический пакет агентов в единый отчет A-01.</p></article>
+              </div>
+            </section>
+
+            <section class="about-principles">
+              <article><span data-icon="shield-check"></span><h4>Источник — документ</h4><p>Агенты работают только с извлеченным контекстом и не должны исполнять инструкции из загруженного файла.</p></article>
+              <article><span data-icon="file-text"></span><h4>Воспроизводимость</h4><p>Методологии версионируются, результаты и вызовы сохраняются, старые версии не уничтожаются.</p></article>
+              <article><span data-icon="messages-square"></span><h4>Техника остается внутри</h4><p>Пользователь видит понятный вывод A-01, а модели, токены, стоимость и внутренние трассы остаются техническим слоем.</p></article>
+              <article><span data-icon="info"></span><h4>Ментор, не судья</h4><p>Система помогает усилить работу, но не заменяет научного руководителя, эксперта или решение комиссии.</p></article>
+            </section>
+          </div>
         </section>
       </main>
     </div>

@@ -23,6 +23,10 @@ for (const id of [
 }
 
 assert(html.includes("Использовать пример работы"), "Missing sample document button");
+assert(html.includes("Цифровой консилиум"), "About page must explain the multi-agent system");
+assert(html.includes("От документа до решения"), "About page must show the analysis pipeline");
+assert(html.includes("Три модели — три класса задач"), "About page must explain model roles");
+assert(html.includes('class="about-agents"'), "About page must include the agent team");
 assert(!html.includes("Демонстрационный автономный режим"), "Mock mode banner must stay hidden from the main UI");
 assert(app.includes("Ctrl") || app.includes("ctrlKey"), "Missing presenter keyboard shortcut");
 assert(app.includes("requestImprovementDirection"), "Improvement direction must use a service");
