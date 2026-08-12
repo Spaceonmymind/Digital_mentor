@@ -31,7 +31,12 @@ assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");
 assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
 assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");
 assert(app.includes('response.answer, { remoteText: true }'), "Mentor chat must request remote TTS");
-assert(app.includes("!options.analysisId && !options.remoteText"), "Remote TTS must allow explicit dialog text");
+assert(app.includes("speechService.hasPrerecorded?.(message)"), "Remote TTS must allow prerecorded standard phrases");
+assert(speech.includes("PRERECORDED_SPEECH"), "Missing prerecorded speech mapping");
+assert(speech.includes("/src/assets/audio/greeting.mp3"), "Missing prerecorded greeting mapping");
+for (const audioFile of speech.matchAll(/\/src\/assets\/audio\/([^"']+\.mp3)/g)) {
+  assert(existsSync(resolve(root, "src/assets/audio", audioFile[1])), `Missing prerecorded audio ${audioFile[1]}`);
+}
 assert(mascot.includes("fallbackGif"), "Missing mascot GIF fallback");
 assert(mascot.includes("is-mascot-placeholder"), "Missing mascot CSS placeholder fallback");
 assert(existsSync(resolve(root, "../demo/sample-document.pdf")), "Missing sample PDF");

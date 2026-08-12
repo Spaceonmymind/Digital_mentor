@@ -1,5 +1,21 @@
 import { synthesizeAnalysisSpeech, synthesizeSpeech } from "../api.js";
 
+const PRERECORDED_SPEECH = new Map([
+  ["Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.", "/src/assets/audio/greeting.mp3"],
+  ["Загрузите работу, и я проведу комплексный анализ.", "/src/assets/audio/upload-prompt.mp3"],
+  ["Получаю документ и проверяю возможность обработки.", "/src/assets/audio/uploading.mp3"],
+  ["Документ получен. Я готов приступить к анализу.", "/src/assets/audio/document-ready.mp3"],
+  ["Проверяю документ и готовлю его к анализу.", "/src/assets/audio/analysis-prepare.mp3"],
+  ["Проверяю формат и структуру файла", "/src/assets/audio/check-format.mp3"],
+  ["Анализирую структуру работы", "/src/assets/audio/check-structure.mp3"],
+  ["Оцениваю аргументацию и логику", "/src/assets/audio/check-argumentation.mp3"],
+  ["Формирую рекомендации", "/src/assets/audio/generate-recommendations.mp3"],
+  ["Формирую ответ на ваш вопрос.", "/src/assets/audio/chat-thinking.mp3"],
+  ["Анализ отменен. Можно выбрать другой документ.", "/src/assets/audio/analysis-cancelled.mp3"],
+  ["Открываю подробный анализ работы.", "/src/assets/audio/open-details.mp3"],
+  ["Работа завершена. Отчет и рекомендации готовы к дальнейшей доработке.", "/src/assets/audio/work-completed.mp3"],
+]);
+
 
 export class RemoteTtsSpeechService {
   constructor({ fallback, onFallback } = {}) {
@@ -23,7 +39,16 @@ export class RemoteTtsSpeechService {
     this.fallback?.loadVoices();
   }
 
+  hasPrerecorded(text) {
+    return PRERECORDED_SPEECH.has(text.trim());
+  }
+
   async speak(text, { force = false, analysisId, onPrepare, onFallback, onUnavailable, onStart, onEnd } = {}) {
+    const prerecordedUrl = PRERECORDED_SPEECH.get(text.trim());
+    if (this.ready && prerecordedUrl) {
+      this.stop();
+      return this.playAudio(prerecordedUrl, text, { force, onFallback, onUnavailable, onStart, onEnd });
+    }
     if (!this.ready || this.failed) {
       return this.fallback?.speak(text, { force, onStart, onEnd });
     }
@@ -36,18 +61,30 @@ export class RemoteTtsSpeechService {
         onFallback?.();
         return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
       }
-      this.audio = new Audio(result.audio_url);
+      return this.playAudio(result.audio_url, text, { force, markRemoteFailed: true, onFallback, onUnavailable, onStart, onEnd });
+    } catch (error) {
+      this.onFallback?.();
+      onUnavailable?.();
+      return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
+    }
+  }
+
+  async playAudio(url, text, { force, markRemoteFailed = false, onFallback, onUnavailable, onStart, onEnd } = {}) {
+    try {
+      this.audio = new Audio(url);
       this.audio.onplay = () => onStart?.();
       this.audio.onended = () => onEnd?.();
       this.audio.onerror = () => {
-        this.failed = true;
+        if (markRemoteFailed) this.failed = true;
         this.onFallback?.();
         onFallback?.();
         this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
       };
       await this.audio.play();
-    } catch (error) {
+    } catch {
+      if (markRemoteFailed) this.failed = true;
       this.onFallback?.();
+      onFallback?.();
       onUnavailable?.();
       return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
     }

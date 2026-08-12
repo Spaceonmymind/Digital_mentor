@@ -228,7 +228,12 @@ async function prepareMentorVoice(analysisId) {
 
 function speakMentor(message, force = false, options = {}) {
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
-  if (state.publicConfig.tts_mode === "remote" && !options.analysisId && !options.remoteText) return;
+  if (
+    state.publicConfig.tts_mode === "remote" &&
+    !options.analysisId &&
+    !options.remoteText &&
+    !speechService.hasPrerecorded?.(message)
+  ) return;
   const token = ++state.speechToken;
   speechService.speak(message, {
     force,
