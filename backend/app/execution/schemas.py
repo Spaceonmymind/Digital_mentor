@@ -365,37 +365,100 @@ class TechnicalAssessmentResult(BaseModel):
     processing_time_ms: int
 
 
+DEMO_CRITERIA = (
+    ("C1", "Проблема и актуальность"),
+    ("C2", "Инновационность и продукт"),
+    ("C3", "Рынок и целевая аудитория"),
+    ("C4", "Бизнес-модель"),
+    ("C5", "Финансовая реализуемость"),
+    ("C6", "Риски и развитие"),
+)
+
+
+class DemoEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    section: str | None
+    quote: str | None
+
+    @model_validator(mode="after")
+    def compact(self):
+        self.section = self.section[:120] if self.section else None
+        self.quote = self.quote[:300] if self.quote else None
+        return self
+
+
+class DemoAgentCriterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_code: Literal["C1", "C2", "C3", "C4", "C5", "C6"]
+    score_recommendation: int
+    summary: str
+    strengths: list[str]
+    issues: list[str]
+    evidence: list[DemoEvidence]
+    confidence: float
+
+    @field_validator("score_recommendation", mode="before")
+    @classmethod
+    def normalize_score(cls, value: Any) -> int:
+        return normalize_demo_score(value, max_score=10)
+
+    @field_validator("confidence")
+    @classmethod
+    def validate_confidence(cls, value: float) -> float:
+        if value < 0 or value > 1:
+            raise ValueError("confidence must be between 0 and 1")
+        return value
+
+    @model_validator(mode="after")
+    def compact(self):
+        if not self.summary.strip():
+            raise ValueError("summary is required")
+        self.summary = self.summary[:360]
+        self.strengths = [item[:240] for item in self.strengths[:2]]
+        self.issues = [item[:240] for item in self.issues[:2]]
+        self.evidence = self.evidence[:3]
+        return self
+
+
 class DemoAgentOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     summary: str
-    strengths: list[str]
-    issues: list[str]
+    criteria: list[DemoAgentCriterion]
     recommendations: list[str]
-    score: int
-
-    @field_validator("score", mode="before")
-    @classmethod
-    def normalize_score(cls, value: Any) -> int:
-        return normalize_demo_score(value, max_score=10)
 
     @model_validator(mode="after")
     def limit_demo_lists(self):
         if not self.summary.strip():
             raise ValueError("summary is required")
         self.summary = self.summary[:500]
-        self.strengths = self.strengths[:2]
-        self.issues = self.issues[:2]
-        self.recommendations = self.recommendations[:2]
+        if not self.criteria:
+            raise ValueError("at least one criterion assessment is required")
+        codes = [item.criterion_code for item in self.criteria]
+        if len(codes) != len(set(codes)):
+            raise ValueError("criterion assessments must be unique")
+        self.recommendations = [item[:300] for item in self.recommendations[:3]]
         return self
 
 
 class DemoCriterionScore(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: Literal["Проблема", "Решение", "Архитектура", "Экономика", "Риски", "Инновационность"]
+    code: Literal["C1", "C2", "C3", "C4", "C5", "C6"]
+    name: Literal[
+        "Проблема и актуальность",
+        "Инновационность и продукт",
+        "Рынок и целевая аудитория",
+        "Бизнес-модель",
+        "Финансовая реализуемость",
+        "Риски и развитие",
+    ]
     score: int
     comment: str
+    strengths: list[str]
+    issues: list[str]
 
     @field_validator("score", mode="before")
     @classmethod
@@ -407,6 +470,8 @@ class DemoCriterionScore(BaseModel):
         if not self.comment.strip():
             raise ValueError("demo criterion comment is required")
         self.comment = self.comment[:500]
+        self.strengths = [item[:240] for item in self.strengths[:2]]
+        self.issues = [item[:240] for item in self.issues[:2]]
         return self
 
 
@@ -420,6 +485,7 @@ class DemoFinalReport(BaseModel):
     recommendations: list[str]
     conclusion: str
     spoken_summary: str
+    disclaimer: str
 
     @field_validator("overall_score", mode="before")
     @classmethod
@@ -430,15 +496,21 @@ class DemoFinalReport(BaseModel):
     def validate_score_sum(self):
         if len(self.criteria) != 6:
             raise ValueError("demo final report requires exactly 6 criteria")
+        actual = [(item.code, item.name) for item in self.criteria]
+        if actual != list(DEMO_CRITERIA):
+            raise ValueError("demo final report requires ordered C1-C6 criteria")
         if not self.conclusion.strip():
             raise ValueError("demo conclusion is required")
         if not self.spoken_summary.strip():
             raise ValueError("demo spoken_summary is required")
-        self.strengths = self.strengths[:3]
-        self.remarks = self.remarks[:3]
-        self.recommendations = self.recommendations[:3]
+        if not self.disclaimer.strip():
+            raise ValueError("demo disclaimer is required")
+        self.strengths = [item[:360] for item in self.strengths[:5]]
+        self.remarks = [item[:360] for item in self.remarks[:5]]
+        self.recommendations = [item[:500] for item in self.recommendations[:5]]
         self.conclusion = self.conclusion[:500]
-        self.spoken_summary = self.spoken_summary[:700]
+        self.spoken_summary = self.spoken_summary[:500]
+        self.disclaimer = self.disclaimer[:400]
         total = sum(item.score for item in self.criteria)
         if self.overall_score != total:
             self.overall_score = total

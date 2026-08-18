@@ -31,6 +31,11 @@ assert(!html.includes("Демонстрационный автономный р�
 assert(app.includes("Ctrl") || app.includes("ctrlKey"), "Missing presenter keyboard shortcut");
 assert(app.includes("requestImprovementDirection"), "Improvement direction must use a service");
 assert(app.includes("addHistoryItem"), "Missing local history save");
+assert(app.includes("Предварительная оценка цифрового ментора"), "Missing preliminary mentor score label");
+assert(app.includes('`${score}/10`'), "Demo criteria must render X/10");
+assert(app.includes('`${normalized.overall_score} / 60`'), "Demo overall score must render XX/60");
+assert(app.includes("criterion__details"), "Demo criteria must provide compact details");
+assert(app.includes("Подробнее"), "Demo criteria must include the details control");
 assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");
 assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
 assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");

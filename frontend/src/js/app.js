@@ -514,10 +514,10 @@ function resetScenario() {
 }
 
 const processingAgents = [
-  { title: "Проблема", description: "проверяю актуальность и противоречие" },
-  { title: "Экономика", description: "смотрю модель, расчеты и пороги" },
-  { title: "Архитектура", description: "проверяю реализуемость решения" },
-  { title: "Риски", description: "ищу слабые места и ограничения" },
+  { title: "Проблема", description: "проверяю актуальность и потребность" },
+  { title: "Бизнес и финансы", description: "смотрю модель, коммерциализацию и расчеты" },
+  { title: "Продукт", description: "проверяю новизну, MVP и реализуемость" },
+  { title: "Рынок и риски", description: "проверяю конкурентов, развитие и ограничения" },
   { title: "Итог", description: "собираю понятное заключение" },
 ];
 
@@ -569,20 +569,29 @@ function renderResults(result) {
 
   elements.criteriaList.innerHTML = normalized.criteria
     .map(
-      ({ title, score, explanation }) => `
+      ({ code, title, score, explanation, strengths = [], issues = [] }) => `
         <div class="criterion">
           <div class="criterion__head">
-            <span>${title}</span>
+            <span>${normalized.isDemoReport && code ? `${code}. ` : ""}${title}</span>
             <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}%`}</strong>
           </div>
           <small>${explanation || getScoreLevel(score)}</small>
           <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : normalized.isDemoReport ? Math.round((score / 10) * 100) : score}%"></span></div>
+          ${normalized.isDemoReport ? `
+            <details class="criterion__details">
+              <summary>Подробнее</summary>
+              <div class="criterion__details-body">
+                ${strengths.length ? `<strong>Сильные стороны</strong><ul>${strengths.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+                ${issues.length ? `<strong>Что доработать</strong><ul>${issues.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+              </div>
+            </details>
+          ` : ""}
         </div>
       `,
     )
     .join("");
 
-  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Demo-оценка" : "Итоговая оценка";
+  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Предварительная оценка цифрового ментора" : "Итоговая оценка";
   document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score} / 60` : `${normalized.overall_score} / 100`;
   document.querySelector(".score-card > div span").textContent = normalized.verdict;
   const ring = document.querySelector(".score-ring");
@@ -643,11 +652,13 @@ function normalizeDemoReportResult(result, report) {
     currentStage: null,
     verdict: report.conclusion,
     criteria: (report.criteria || []).map((item, index) => ({
-      code: String(index + 1),
+      code: item.code || `C${index + 1}`,
       title: item.name,
       score: item.score,
       max_score: 10,
       explanation: item.comment,
+      strengths: item.strengths || [],
+      issues: item.issues || [],
     })),
     strengths: report.strengths || [],
     improvements: report.remarks || [],

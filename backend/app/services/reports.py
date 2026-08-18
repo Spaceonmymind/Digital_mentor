@@ -192,7 +192,7 @@ class ReportService:
     def _build_demo_report_lines(self, document: Document, report: dict) -> list[str]:
         lines = [
             "ЦИФРОВОЙ МЕНТОР",
-            "Demo-разбор работы",
+            "Предварительная оценка документа ВКР-стартапа",
             "",
             f"Работа: {document.original_name}",
             f"Общий балл: {report.get('overall_score')} / 60",
@@ -200,15 +200,19 @@ class ReportService:
             "Оценки по критериям:",
         ]
         for item in report.get("criteria", []):
-            lines.append(f"- {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
-        lines.extend(["", "3 сильные стороны:"])
+            lines.append(f"- {item.get('code')}. {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
+            for strength in item.get("strengths", []):
+                lines.append(f"  Сильная сторона: {strength}")
+            for issue in item.get("issues", []):
+                lines.append(f"  Требует доработки: {issue}")
+        lines.extend(["", "Сильные стороны:"])
         lines.extend(f"- {item}" for item in report.get("strengths", []))
-        lines.extend(["", "3 замечания:"])
+        lines.extend(["", "Что требует доработки:"])
         lines.extend(f"- {item}" for item in report.get("remarks", []))
-        lines.extend(["", "3 рекомендации:"])
+        lines.extend(["", "Приоритетные рекомендации:"])
         lines.extend(f"- {item}" for item in report.get("recommendations", []))
         lines.extend(["", "Итоговое заключение:", report.get("conclusion") or ""])
-        lines.extend(["", "Отметка: demo-режим использует сокращенный мультиагентный анализ и не заменяет полный expert-разбор."])
+        lines.extend(["", report.get("disclaimer") or "Предварительная аналитическая оценка не заменяет решение ГЭК."])
         return lines
 
     def _build_detailed_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
@@ -237,7 +241,8 @@ class ReportService:
                     [
                         f"- {item.get('name')}: {item.get('score')} / 10",
                         f"  Комментарий: {item.get('comment')}",
-                        "  Что проверить в тексте: найдите разделы, где автор показывает наблюдаемую проблему, механизм решения, архитектуру, экономику и риски не декларациями, а проверяемыми элементами.",
+                        *[f"  Сильная сторона: {value}" for value in item.get("strengths", [])],
+                        *[f"  Требует доработки: {value}" for value in item.get("issues", [])],
                     ]
                 )
         else:

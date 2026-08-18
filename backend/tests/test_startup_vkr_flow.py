@@ -161,29 +161,46 @@ class FakeStartupLLM:
                 confidence=0.8,
             )
         elif response_model is DemoAgentOutput:
+            assigned = {
+                "C1, C3": ["C1", "C3"],
+                "C2, C6": ["C2", "C6"],
+                "C4, C5": ["C4", "C5"],
+                "C3, C6": ["C3", "C6"],
+            }
+            codes = next((value for marker, value in assigned.items() if marker in user_prompt), ["C1"])
             output = DemoAgentOutput(
                 summary="Demo-агент нашел ключевой вывод.",
-                strengths=["Есть предмет проверки"],
-                issues=["Нужно уточнить доказательства"],
+                criteria=[
+                    {
+                        "criterion_code": code,
+                        "score_recommendation": 8,
+                        "summary": "Критерий раскрыт, но доказательства нужно уточнить.",
+                        "strengths": ["Есть предмет проверки"],
+                        "issues": ["Нужно уточнить доказательства"],
+                        "evidence": [{"section": "Резюме", "quote": None}],
+                        "confidence": 0.8,
+                    }
+                    for code in codes
+                ],
                 recommendations=["Сжать аргументацию до проверяемой схемы"],
-                score=8,
             )
         elif response_model is DemoFinalReport:
             output = DemoFinalReport(
                 overall_score=47,
                 criteria=[
-                    {"name": "Проблема", "score": 8, "comment": "Проблема показана достаточно ясно."},
-                    {"name": "Решение", "score": 8, "comment": "Решение понятно, но механизм нужно уточнить."},
-                    {"name": "Архитектура", "score": 7, "comment": "Архитектура намечена, отказные сценарии слабые."},
-                    {"name": "Экономика", "score": 8, "comment": "Экономика есть, нужны go/no-go пороги."},
-                    {"name": "Риски", "score": 7, "comment": "Риски названы, но митигация неполная."},
-                    {"name": "Инновационность", "score": 9, "comment": "Идея выглядит новой для выбранного контекста."},
+                    {"code": "C1", "name": "Проблема и актуальность", "score": 8, "comment": "Проблема показана достаточно ясно.", "strengths": ["Потребность описана"], "issues": ["Нужны источники"]},
+                    {"code": "C2", "name": "Инновационность и продукт", "score": 8, "comment": "Продукт понятен, но механизм нужно уточнить.", "strengths": ["Продукт определен"], "issues": ["MVP описан кратко"]},
+                    {"code": "C3", "name": "Рынок и целевая аудитория", "score": 7, "comment": "Сегмент назван, гипотезы подтверждены частично.", "strengths": ["Сегмент выделен"], "issues": ["Мало интервью"]},
+                    {"code": "C4", "name": "Бизнес-модель", "score": 8, "comment": "Модель дохода описана.", "strengths": ["Плательщик понятен"], "issues": ["Каналы требуют проверки"]},
+                    {"code": "C5", "name": "Финансовая реализуемость", "score": 7, "comment": "Финансы есть, предпосылки требуют проверки.", "strengths": ["Затраты оценены"], "issues": ["Нет сценариев"]},
+                    {"code": "C6", "name": "Риски и развитие", "score": 9, "comment": "Риски и roadmap раскрыты.", "strengths": ["Есть roadmap"], "issues": ["Нужны владельцы рисков"]},
                 ],
                 strengths=["Есть актуальная проблема", "Есть архитектурная идея", "Есть экономическое обоснование"],
                 remarks=["Не хватает отказных сценариев", "Не хватает go/no-go порогов", "Нужно уточнить доказательства"],
                 recommendations=["Описать fallback", "Добавить пороги решения", "Сжать механизм в схему"],
                 conclusion="Demo-разбор показывает сильную основу и несколько проверяемых направлений доработки.",
                 spoken_summary="Demo-анализ завершен: общий балл 47 из 60, главный следующий шаг — уточнить fallback и пороги.",
+                disclaimer="Предварительная аналитическая оценка документа не заменяет решение ГЭК.",
             )
         else:
             output = self._mentor_report()
@@ -221,11 +238,12 @@ async def test_startup_vkr_seed_creates_real_methodology_without_demo_plan_items
         )
 
     assert methodology.is_demo is False
-    assert methodology.version == "1.1"
-    assert {criterion.source for criterion in criteria} == {"anti_during_methodology"}
+    assert methodology.version == "2.0"
+    assert {criterion.number for criterion in criteria} == {"C1", "C2", "C3", "C4", "C5", "C6"}
+    assert {criterion.source for criterion in criteria} == {"FinUniversity VKR Startup Regulation, Order №3136/o dated 20.12.2023"}
     assert all(criterion.weight is None for criterion in criteria)
     assert len(agents) == 9
-    assert pipeline.tasks_count == 7
+    assert pipeline.tasks_count == 18
     assert not any(task.criterion.startswith("Demo") for task in pipeline.tasks)
 
 
@@ -250,10 +268,17 @@ async def test_startup_vkr_keeps_old_version_and_uses_new_active_version():
         versions = (
             await session.execute(select(Methodology.version).where(Methodology.code == "STARTUP_VKR").order_by(Methodology.version))
         ).scalars().all()
+        active_versions = (
+            await session.execute(
+                select(Methodology.version).where(Methodology.code == "STARTUP_VKR", Methodology.is_active.is_(True))
+            )
+        ).scalars().all()
 
     assert "1.0" in versions
     assert "1.1" in versions
-    assert methodology.version == "1.1"
+    assert "2.0" in versions
+    assert methodology.version == "2.0"
+    assert active_versions == ["2.0"]
 
 
 def test_a15_revision_126_contains_nine_checks():
@@ -273,8 +298,8 @@ async def test_startup_vkr_flow_runs_worker_critic_and_one_final_expert():
         result = await StartupVkrAgentFlow(session, llm_client=llm).execute(pipeline.assessment_id, analysis_id="analysis-1")
 
     assert result.status == "requires_revision"
-    assert result.methodology_version == "1.1"
-    assert result.total_tokens == 360
+    assert result.methodology_version == "2.0"
+    assert result.total_tokens == 690
     assert result.report is not None
     assert result.report.header.current_stage == "S2"
     assert len([result.report.one_question.question]) == 1
@@ -286,7 +311,7 @@ async def test_startup_vkr_flow_runs_worker_critic_and_one_final_expert():
     assert "Worker" not in report_text
     assert "Critic" not in report_text
     assert "quote_not_found" not in report_text
-    assert [call["model"] for call in llm.calls].count(WORKER) == 7
+    assert [call["model"] for call in llm.calls].count(WORKER) == 18
     assert [call["model"] for call in llm.calls].count(CRITIC) == 4
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
 
@@ -311,7 +336,7 @@ async def test_startup_vkr_flow_runs_worker_critic_and_one_final_expert():
 
     public_payload = public_report
     assert "mentor_block" not in public_payload
-    assert technical.total_tokens == 360
+    assert technical.total_tokens == 690
 
 
 @pytest.mark.asyncio
@@ -326,7 +351,7 @@ async def test_startup_vkr_flow_cache_hit_does_not_call_llm_again():
         await StartupVkrAgentFlow(session, llm_client=llm).execute(pipeline.assessment_id, analysis_id="analysis-1")
         await StartupVkrAgentFlow(session, llm_client=llm).execute(pipeline.assessment_id, analysis_id="analysis-1")
 
-    assert len(llm.calls) == 12
+    assert len(llm.calls) == 23
 
 
 @pytest.mark.asyncio
@@ -351,6 +376,27 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1200}
     assert metrics["mode"] == "demo"
     assert metrics["agent_time_a15"] >= 0
+    assert payload.methodology.methodology_version == "2.0"
+    assert [item.code for item in payload.criteria] == ["C1", "C2", "C3", "C4", "C5", "C6"]
+    assert payload.overall_score == sum(item.score for item in payload.criteria)
+
+    analysis = Analysis(
+        id="demo-report-analysis",
+        document_id=document.id,
+        analysis_type="mentor",
+        methodology_id="STARTUP_VKR",
+        methodology_version="2.0",
+        status="completed",
+        progress=100,
+    )
+    result = AnalysisResult(analysis_id=analysis.id, result_json=payload.model_dump(mode="json"))
+    pdf_text = "\n".join(ReportService()._build_lines(analysis, document, result.result_json))
+    assert "Предварительная оценка документа ВКР-стартапа" in pdf_text
+    assert "C1. Проблема и актуальность" in pdf_text
+    assert "не заменяет решение ГЭК" in pdf_text
+    assert "Assessment ID" not in pdf_text
+    assert "Токены" not in pdf_text
+    assert ReportService()._render_pdf(pdf_text.splitlines()).startswith(b"%PDF")
 
 
 @pytest.mark.asyncio
@@ -457,30 +503,37 @@ def test_demo_scores_accept_percent_like_model_output():
     agent = DemoAgentOutput.model_validate(
         {
             "summary": "Короткий вывод.",
-            "strengths": ["Есть проблема"],
-            "issues": ["Мало доказательств"],
+            "criteria": [{
+                "criterion_code": "C1",
+                "score_recommendation": 55,
+                "summary": "Проблема раскрыта частично.",
+                "strengths": ["Есть проблема"],
+                "issues": ["Мало доказательств"],
+                "evidence": [{"section": "Введение", "quote": None}],
+                "confidence": 0.7,
+            }],
             "recommendations": ["Уточнить расчет"],
-            "score": 55,
         }
     )
-    assert agent.score == 6
+    assert agent.criteria[0].score_recommendation == 6
 
     report = DemoFinalReport.model_validate(
         {
             "overall_score": 55,
             "criteria": [
-                {"name": "Проблема", "score": "80%", "comment": "Проблема видна."},
-                {"name": "Решение", "score": 70, "comment": "Решение описано."},
-                {"name": "Архитектура", "score": "6/10", "comment": "Архитектура намечена."},
-                {"name": "Экономика", "score": 50, "comment": "Экономика требует проверки."},
-                {"name": "Риски", "score": 4, "comment": "Риски перечислены."},
-                {"name": "Инновационность", "score": 90, "comment": "Новизна заявлена."},
+                {"code": "C1", "name": "Проблема и актуальность", "score": "80%", "comment": "Проблема видна.", "strengths": [], "issues": []},
+                {"code": "C2", "name": "Инновационность и продукт", "score": 70, "comment": "Продукт описан.", "strengths": [], "issues": []},
+                {"code": "C3", "name": "Рынок и целевая аудитория", "score": "6/10", "comment": "Рынок намечен.", "strengths": [], "issues": []},
+                {"code": "C4", "name": "Бизнес-модель", "score": 50, "comment": "Модель требует проверки.", "strengths": [], "issues": []},
+                {"code": "C5", "name": "Финансовая реализуемость", "score": 4, "comment": "Финансы неполны.", "strengths": [], "issues": []},
+                {"code": "C6", "name": "Риски и развитие", "score": 90, "comment": "Риски заявлены.", "strengths": [], "issues": []},
             ],
             "strengths": ["Сильное ядро"],
             "remarks": ["Нужна проверка"],
             "recommendations": ["Собрать доказательства"],
             "conclusion": "Работу можно быстро улучшить.",
             "spoken_summary": "Я закончил разбор.",
+            "disclaimer": "Предварительная оценка не заменяет решение ГЭК.",
         }
     )
     assert [item.score for item in report.criteria] == [8, 7, 6, 5, 4, 9]
