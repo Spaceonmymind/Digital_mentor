@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 const root = resolve(import.meta.dirname, "..");
 const html = readFileSync(resolve(root, "index.html"), "utf8");
 const app = readFileSync(resolve(root, "src/js/app.js"), "utf8");
+const css = readFileSync(resolve(root, "src/styles/global.css"), "utf8");
 const speech = readFileSync(resolve(root, "src/js/modules/speech.js"), "utf8");
 const mascot = readFileSync(resolve(root, "src/js/modules/mascot.js"), "utf8");
 
@@ -49,6 +50,8 @@ assert(app.includes("report-list-item__text"), "Report lists must render text se
 assert(html.includes("Что требует доработки"), "Report issue heading must stay compact");
 assert(app.includes("data-detail"), "Recommendation details control must remain available");
 assert(html.includes("recommendationProgressBar"), "Recommendation planning progress must remain available");
+assert(html.includes('id="recommendationPlan" tabindex="0"'), "Recommendation cards must expose a keyboard-scrollable region");
+assert(/#resultsStage \.recommendation-grid\s*\{[^}]*overflow-y:\s*auto/s.test(css), "Recommendation cards must have a vertical scroll region");
 assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual interpolation");
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
