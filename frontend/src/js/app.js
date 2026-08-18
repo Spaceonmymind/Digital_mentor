@@ -720,7 +720,7 @@ function renderResults(result) {
                 ${strengths.length ? `<strong>Сильные стороны</strong><ul>${strengths.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
                 ${issues.length ? `<strong>Что доработать</strong><ul>${issues.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
                 ${recommendations.length ? `<strong>Рекомендации</strong><ul>${recommendations.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
-                ${evidence.length ? `<div class="criterion__evidence-heading"><strong>Фрагменты документа</strong><span>${evidence.length}</span></div>${evidence.slice(0, 2).map((item, index) => `<div class="criterion__evidence"><p><b>${item.section || item.criterion_code || "Фрагмент"}</b>${truncateToSentence(item.quote || "Связанный фрагмент документа", 130)}</p><button class="criterion__evidence-button" type="button" data-show-evidence="${code}:${index}">Открыть фрагмент</button></div>`).join("")}` : ""}
+                ${evidence.length ? `<div class="criterion__evidence-heading"><strong>Фрагменты документа</strong><span>${evidence.length}</span></div>${evidence.slice(0, 2).map((item) => `<div class="criterion__evidence"><p><b>${item.section || item.criterion_code || "Фрагмент"}</b>${truncateToSentence(item.quote || "Связанный фрагмент документа", 130)}</p><button class="criterion__evidence-button" type="button" data-evidence-index="${state.evidence.indexOf(item)}">Открыть фрагмент</button></div>`).join("")}` : ""}
               </div>
             </details>
           ` : ""}
@@ -979,14 +979,17 @@ function renderRemark() {
 }
 
 function bindEvidenceButtons(container) {
-  container.querySelectorAll("[data-show-evidence]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const [code, index] = button.dataset.showEvidence.split(":");
-      openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
-    });
-  });
   container.querySelectorAll("[data-evidence-index]").forEach((button) => {
-    button.addEventListener("click", () => openEvidence(state.evidence[Number(button.dataset.evidenceIndex)]));
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const index = Number(button.dataset.evidenceIndex);
+      if (!Number.isInteger(index) || !state.evidence[index]) {
+        showNotification("Фрагмент не найден. Обновите результаты анализа.");
+        return;
+      }
+      openEvidence(state.evidence[index]);
+    });
   });
 }
 
@@ -1369,8 +1372,13 @@ async function openMetrics() {
 }
 
 function openEvidence(item) {
-  if (!item) return;
+  if (!item) {
+    showNotification("Не удалось открыть связанный фрагмент.");
+    return;
+  }
   const isPdf = item.source_type === "pdf";
+  elements.documentModal.hidden = false;
+  document.body.classList.add("is-modal-open");
   elements.documentModal.classList.toggle("is-pdf", isPdf);
   elements.documentModal.classList.toggle("is-fragment", !isPdf);
   elements.documentModalTitle.textContent = isPdf ? `Исходный PDF${item.page ? ` · страница ${item.page}` : ""}` : "Фрагмент DOCX";
@@ -1391,9 +1399,7 @@ function openEvidence(item) {
     elements.documentPageHighlight.style.width = `${((x1 - x0) / item.page_width) * 100}%`;
     elements.documentPageHighlight.style.height = `${((y1 - y0) / item.page_height) * 100}%`;
   }
-  elements.documentModal.hidden = false;
-  document.body.classList.add("is-modal-open");
-  elements.documentModal.querySelector(".document-viewer").focus();
+  window.requestAnimationFrame(() => elements.documentModal.querySelector(".document-viewer")?.focus());
 }
 
 function openFullscreen() {

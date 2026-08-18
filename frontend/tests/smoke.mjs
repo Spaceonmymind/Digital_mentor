@@ -59,10 +59,12 @@ assert(!/function closeRecommendationModal\(\)[\s\S]*?scrollTo\(/.test(app), "Cl
 assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual interpolation");
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
-assert(app.includes("data-show-evidence"), "Evidence navigation control is missing");
+assert(app.includes("data-evidence-index"), "Evidence navigation control is missing");
 assert(app.includes("Фрагменты исходного документа"), "Source evidence must be visible in the objections section");
 assert(app.includes("data-evidence-index"), "PDF evidence buttons must open from the objections section");
 assert(app.includes("bindEvidenceButtons"), "Evidence controls must receive direct click handlers");
+assert(app.includes("state.evidence.indexOf(item)"), "Evidence buttons must use stable global indexes");
+assert(app.includes("Фрагмент не найден. Обновите результаты анализа."), "Broken evidence links must show a visible error");
 assert(app.includes("criterion__evidence-button"), "Criterion evidence must use compact controls");
 assert(app.includes("evidence.slice(0, 2)"), "Criterion details must limit evidence previews");
 assert(app.includes('classList.toggle("is-fragment"'), "DOCX evidence must use the compact fragment modal");
