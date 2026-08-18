@@ -913,7 +913,14 @@ function renderSummary(result) {
 }
 
 function renderList(container, items) {
-  container.innerHTML = items.map((item) => `<li>${item}</li>`).join("");
+  const isStrength = ["strengthsList", "summaryStrengths"].includes(container.id);
+  const icon = isStrength ? "✓" : "!";
+  container.innerHTML = items.map((item) => `
+    <li class="report-list-item ${isStrength ? "is-positive" : "is-warning"}">
+      <span class="report-list-item__icon" aria-hidden="true">${icon}</span>
+      <span class="report-list-item__text">${item}</span>
+    </li>
+  `).join("");
 }
 
 function renderDocumentReview() {

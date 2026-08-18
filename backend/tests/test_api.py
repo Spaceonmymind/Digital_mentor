@@ -667,6 +667,8 @@ async def test_create_analysis_progress_and_result(client):
     assert "Подробный аналитический отчет" in detailed_text
     assert "Конкретные фрагменты текста" in detailed_text
     assert "Для анализа был использован сравнительный подход" in detailed_text
+    assert "Почему этот фрагмент важен" in detailed_text
+    assert "Что рекомендуется изменить" in detailed_text
 
 
 @pytest.mark.asyncio

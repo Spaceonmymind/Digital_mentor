@@ -3981,6 +3981,90 @@ body.is-modal-open {
   }
 }
 
+/* Final report flow: one page scroll, no clipped recommendation controls. */
+#resultsStage,
+#resultsStage .recommendation-section,
+#resultsStage .recommendation-grid,
+#resultsStage .recommendation-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#resultsStage .recommendation-section {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto;
+}
+
+#resultsStage .recommendation-grid {
+  align-items: stretch;
+  overflow: visible;
+}
+
+#resultsStage .recommendation-card {
+  height: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+#resultsStage .recommendation-card__actions {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+#resultsStage .recommendation-card__actions .button {
+  min-height: 44px;
+  overflow: visible;
+  white-space: normal;
+}
+
+#resultsStage .score-card {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 520px);
+}
+
+#resultsStage .score-overview,
+#resultsStage .criteria-score-summary,
+#resultsStage .criteria-score-summary > div {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+#resultsStage .score-overview {
+  grid-template-columns: minmax(132px, 168px) minmax(0, 1fr);
+}
+
+#resultsStage .criteria-score-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.report-list-item {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 14px !important;
+}
+
+.report-list-item::before { content: none !important; }
+.report-list-item__icon { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; border-radius: 8px; font-weight: 900; line-height: 1; }
+.report-list-item__text { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.report-list-item.is-positive .report-list-item__icon { color: #17653b; background: rgba(38,166,91,.12); }
+.report-list-item.is-warning .report-list-item__icon { color: #8a5717; background: rgba(222,142,44,.14); }
+
+@media (max-width: 1500px) {
+  #resultsStage .score-card { grid-template-columns: 1fr; }
+  #resultsStage .score-overview { grid-template-columns: 150px minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  #resultsStage .score-overview { grid-template-columns: 1fr; }
+  #resultsStage .criteria-score-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 /* Compact mentor copy is a status surface; complete answers remain in chat. */
 .avatar-card .mentor-message {
   min-height: 0;
@@ -4871,4 +4955,21 @@ body.is-modal-open {
   .about-pipeline article:last-child, .about-agent--lead { grid-column: auto; }
   .about-models__grid article { grid-template-columns: 12px 1fr; }
   .about-models__grid p { grid-column: 2; }
+}
+
+/* Cascade guard for the report layout. Keep this block last. */
+#resultsStage .recommendation-section { height: auto !important; max-height: none !important; overflow: visible !important; }
+#resultsStage .recommendation-card { min-width: 0; height: auto; overflow: visible; }
+#resultsStage .recommendation-card__actions { margin-top: auto; }
+#resultsStage .score-card { grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); }
+#resultsStage .score-overview { min-width: 0; grid-template-columns: minmax(132px, 168px) minmax(0, 1fr); }
+#resultsStage .criteria-score-summary { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 1500px) {
+  #resultsStage .score-card { grid-template-columns: 1fr; }
+  #resultsStage .score-overview { grid-template-columns: 150px minmax(0, 1fr); }
+}
+
+@media (max-width: 760px) {
+  #resultsStage .score-overview { grid-template-columns: 1fr; }
 }

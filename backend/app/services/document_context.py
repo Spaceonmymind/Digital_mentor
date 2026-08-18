@@ -80,7 +80,7 @@ def _items_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         style = str(paragraph.get("style") or "")
         if "heading" in style.lower() or _looks_like_heading(text):
-            current_section = text[:160]
+            current_section = _trim(text, 160)
         if len(text) >= 60:
             items.append(
                 {

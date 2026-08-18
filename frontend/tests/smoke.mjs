@@ -44,6 +44,11 @@ assert(app.includes('`${normalized.overall_score} / 60`'), "Demo overall score m
 assert(app.includes("criterion__details"), "Demo criteria must provide compact details");
 assert(app.includes("Подробнее"), "Demo criteria must include the details control");
 assert(app.includes("truncateToSentence"), "Report previews must truncate at sentence boundaries");
+assert(app.includes("report-list-item__icon"), "Report lists must render a separate icon element");
+assert(app.includes("report-list-item__text"), "Report lists must render text separately from the icon");
+assert(html.includes("Что требует доработки"), "Report issue heading must stay compact");
+assert(app.includes("data-detail"), "Recommendation details control must remain available");
+assert(html.includes("recommendationProgressBar"), "Recommendation planning progress must remain available");
 assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual interpolation");
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
