@@ -8,7 +8,7 @@ from docx import Document as DocxDocument
 from sqlalchemy import select
 
 from app.api.v1 import documents as documents_api
-from app.api.v1.analyses import _locate_evidence
+from app.api.v1.analyses import _fallback_pdf_evidence, _locate_evidence
 from app.api.v1 import internal_llm as internal_llm_api
 from app.assessment.models import Assessment
 from app.db.models import Analysis
@@ -54,6 +54,18 @@ def test_pdf_evidence_location_uses_exact_quote_and_bbox():
         ]
     }
     assert _locate_evidence(payload, "цитата из финансовой модели", None) == (3, 7, [1, 2, 3, 4], "exact")
+
+
+def test_pdf_evidence_fallback_uses_real_relevant_block_and_bbox():
+    payload = {
+        "pages": [
+            {"page_number": 1, "blocks": [{"block_index": 1, "text": "Общее описание документа без финансовых показателей и расчетов.", "bbox": [1, 2, 30, 40]}]},
+            {"page_number": 4, "blocks": [{"block_index": 8, "text": "Финансовая модель содержит выручку, затраты, инвестиции и расчет окупаемости проекта.", "bbox": [10, 20, 300, 80]}]},
+        ]
+    }
+    page, block_index, bbox, quote = _fallback_pdf_evidence(payload, "C5")
+    assert (page, block_index, bbox) == (4, 8, [10, 20, 300, 80])
+    assert quote.startswith("Финансовая модель")
 
 
 async def upload_pdf(client):

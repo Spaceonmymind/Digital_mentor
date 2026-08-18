@@ -228,10 +228,11 @@ async def get_analysis_metrics(analysis_id: str, session: AsyncSession = Depends
 
 def _locate_evidence(payload: dict, quote: str | None, section: str | None) -> tuple[int | None, int | None, list[float] | None, str]:
     normalized_quote = " ".join((quote or "").split()).lower()
+    quote_prefix = normalized_quote.rstrip(".… ")
     for page in payload.get("pages") or []:
         for block in page.get("blocks") or []:
             block_text = " ".join(str(block.get("text") or "").split()).lower()
-            if normalized_quote and normalized_quote in block_text:
+            if normalized_quote and (normalized_quote in block_text or (len(quote_prefix) >= 40 and quote_prefix in block_text)):
                 return page.get("page_number"), block.get("block_index"), block.get("bbox"), "exact"
     normalized_section = (section or "").lower()
     for paragraph in payload.get("paragraphs") or []:
@@ -241,6 +242,33 @@ def _locate_evidence(payload: dict, quote: str | None, section: str | None) -> t
         ):
             return None, paragraph.get("paragraph_index"), None, "fragment"
     return None, None, None, "page_only"
+
+
+_EVIDENCE_TERMS = {
+    "C1": ("проблем", "актуаль", "потребност", "цель"),
+    "C2": ("продукт", "решени", "инновац", "новизн", "mvp", "технолог"),
+    "C3": ("рынок", "аудитор", "клиент", "сегмент", "конкурент"),
+    "C4": ("бизнес", "монетизац", "маркетинг", "продаж", "доход"),
+    "C5": ("финанс", "затрат", "выруч", "окупаем", "инвестиц", "npv", "irr"),
+    "C6": ("риск", "развити", "roadmap", "масштаб", "внедрен", "результат"),
+}
+
+
+def _fallback_pdf_evidence(payload: dict, criterion_code: str) -> tuple[int | None, int | None, list[float] | None, str | None]:
+    terms = _EVIDENCE_TERMS.get(criterion_code, ())
+    candidates = []
+    for page in payload.get("pages") or []:
+        for block in page.get("blocks") or []:
+            text = " ".join(str(block.get("text") or "").split()).strip()
+            if len(text) < 60 or not block.get("bbox"):
+                continue
+            normalized = text.lower()
+            score = sum(1 for term in terms if term in normalized)
+            candidates.append((score, len(text), page, block, text))
+    if not candidates:
+        return None, None, None, None
+    _, _, page, block, text = max(candidates, key=lambda item: (item[0], item[1]))
+    return page.get("page_number"), block.get("block_index"), block.get("bbox"), text[:300]
 
 
 @router.get("/{analysis_id}/evidence", response_model=list[AnalysisEvidenceItem])
@@ -254,10 +282,17 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
     mentor_result = (
         await session.execute(select(MentorAnalysisResult).where(MentorAnalysisResult.analysis_id == analysis_id).limit(1))
     ).scalar_one_or_none()
-    if mentor_result is None:
+    assessment_id = mentor_result.assessment_id if mentor_result else (
+        await session.execute(
+            select(LLMCall.assessment_id)
+            .where(LLMCall.analysis_id == analysis_id, LLMCall.assessment_id.is_not(None))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if assessment_id is None:
         return []
     agent_results = (
-        await session.execute(select(AgentResult).where(AgentResult.assessment_id == mentor_result.assessment_id))
+        await session.execute(select(AgentResult).where(AgentResult.assessment_id == assessment_id))
     ).scalars().all()
     extracted = load_extracted_payload(document)
     source_type = "pdf" if document.mime_type == "application/pdf" else "docx"
@@ -270,6 +305,7 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
             }
     items: list[AnalysisEvidenceItem] = []
     seen: set[tuple] = set()
+    located_criteria: set[str] = set()
     for agent_result in agent_results:
         for criterion in agent_result.output_json.get("criteria") or []:
             for evidence in criterion.get("evidence") or []:
@@ -297,6 +333,31 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
                         match_status=match_status if source_type == "pdf" else "fragment",
                     )
                 )
+                if page and bbox and criterion.get("criterion_code"):
+                    located_criteria.add(criterion.get("criterion_code"))
+    if source_type == "pdf":
+        for criterion_code in _EVIDENCE_TERMS:
+            if criterion_code in located_criteria:
+                continue
+            page, block_index, bbox, quote = _fallback_pdf_evidence(extracted, criterion_code)
+            if not page or not bbox or not quote:
+                continue
+            items.append(
+                AnalysisEvidenceItem(
+                    criterion_code=criterion_code,
+                    document_id=document.id,
+                    page=page,
+                    section="Релевантный фрагмент исходного PDF",
+                    quote=quote,
+                    block_index=block_index,
+                    bbox=bbox,
+                    page_width=page_sizes.get(page, (None, None))[0],
+                    page_height=page_sizes.get(page, (None, None))[1],
+                    source_type="pdf",
+                    match_status="page_only",
+                    extra={"source": "deterministic_pdf_match"},
+                )
+            )
     return items
 
 

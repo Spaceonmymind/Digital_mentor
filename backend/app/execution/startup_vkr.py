@@ -547,6 +547,22 @@ class StartupVkrAgentFlow:
                 "total_score_max": 60,
             },
         )
+        stored = (
+            await self.session.execute(
+                select(MentorAnalysisResult).where(MentorAnalysisResult.assessment_id == assessment.id).limit(1)
+            )
+        ).scalar_one_or_none()
+        if stored is None:
+            stored = MentorAnalysisResult(assessment_id=assessment.id, document_id=assessment.artifact_id)
+        stored.analysis_id = analysis_id or None
+        stored.methodology_code = methodology.code
+        stored.methodology_version = methodology.version
+        stored.status = "completed"
+        stored.result_json = payload.model_dump(mode="json")
+        stored.total_tokens = total_tokens
+        stored.total_cost_rub = total_cost
+        stored.processing_time_ms = processing_time_ms
+        self.session.add(stored)
         metrics = {
             "mode": "demo",
             "total_tokens": total_tokens,

@@ -4651,6 +4651,38 @@ body.is-modal-open {
   margin-top: 4px;
 }
 
+#resultsStage .source-evidence-panel {
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid rgba(0, 152, 175, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(0, 152, 175, 0.1), rgba(255, 255, 255, 0.94));
+}
+
+#resultsStage .source-evidence-panel strong,
+#resultsStage .source-evidence-panel span {
+  display: block;
+}
+
+#resultsStage .source-evidence-panel span {
+  margin-top: 4px;
+  color: #607277;
+  font-size: 13px;
+}
+
+#resultsStage .source-evidence-panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+#resultsStage .source-evidence-panel__actions .button {
+  width: auto;
+  min-height: 42px;
+  margin: 0;
+}
+
 #resultsStage .remark-tab {
   min-width: 42px;
   height: 42px;

@@ -935,7 +935,16 @@ function renderDocumentReview() {
 
 function renderRemark() {
   const remarks = state.remarks || documentRemarks;
+  const pdfEvidence = state.evidence.filter((item) => item.source_type === "pdf" && item.page);
   elements.remarkContent.innerHTML = `
+    ${pdfEvidence.length ? `
+      <section class="source-evidence-panel">
+        <div><strong>Фрагменты в исходном PDF</strong><span>Откройте страницу с подсветкой исходного текста</span></div>
+        <div class="source-evidence-panel__actions">
+          ${pdfEvidence.slice(0, 6).map((item) => `<button class="button button--ghost" type="button" data-evidence-index="${state.evidence.indexOf(item)}">${item.criterion_code || "Фрагмент"} · Показать в PDF</button>`).join("")}
+        </div>
+      </section>
+    ` : ""}
     <div class="remark-list">
       ${remarks
         .map((remark, index) => {
@@ -1584,6 +1593,11 @@ function bindEvents() {
     if (!button) return;
     const [code, index] = button.dataset.showEvidence.split(":");
     openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
+  });
+  elements.remarkContent.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-evidence-index]");
+    if (!button) return;
+    openEvidence(state.evidence[Number(button.dataset.evidenceIndex)]);
   });
   elements.metricsButton.addEventListener("click", openMetrics);
   elements.metricsModalClose.addEventListener("click", () => closeOverlay(elements.metricsModal));

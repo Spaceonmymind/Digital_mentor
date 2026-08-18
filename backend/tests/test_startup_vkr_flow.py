@@ -373,8 +373,17 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
             PipelineBuildRequest(artifact_type="STARTUP_VKR", artifact_id=document.id, filename=document.original_name)
         )
         payload, metrics = await StartupVkrAgentFlow(session, llm_client=llm).execute_demo(pipeline.assessment_id, analysis_id="analysis-demo")
+        stored_demo = (
+            await session.execute(
+                select(MentorAnalysisResult).where(MentorAnalysisResult.assessment_id == pipeline.assessment_id)
+            )
+        ).scalar_one()
 
     assert payload.overall_score == 47
+    assert stored_demo.analysis_id == "analysis-demo"
+    assert stored_demo.document_id == document.id
+    assert stored_demo.status == "completed"
+    assert stored_demo.result_json["extra_blocks"]["assessment_id"] == pipeline.assessment_id
     assert payload.extra_blocks["mode"] == "demo"
     assert payload.extra_blocks["demo_report"]["overall_score"] == 47
     assert [call["model"] for call in llm.calls].count(WORKER) == 2
