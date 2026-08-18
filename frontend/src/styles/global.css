@@ -3991,6 +3991,72 @@ body.is-modal-open {
   -webkit-line-clamp: 2;
 }
 
+/* Report UX completion: scrollable history, expert overview and real PDF evidence overlay. */
+#historyModal .modal-card {
+  max-height: min(88vh, 820px);
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.history-list--scroll {
+  min-height: 0;
+  max-height: min(58vh, 560px);
+  padding-right: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.history-list--scroll .history-item { flex: 0 0 auto; }
+.history-limitation { font-size: 13px !important; }
+
+#resultsStage .score-overview { display: grid; grid-template-columns: auto minmax(220px, 1fr); gap: 24px; align-items: center; }
+#resultsStage .project-level { width: fit-content; margin-top: 16px; padding: 10px 14px; border-radius: 14px; background: rgba(0,107,128,.08); }
+#resultsStage .project-level small, #resultsStage .project-level b { display: block; margin: 0; }
+#resultsStage .project-level small { color: #64767a; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+#resultsStage .project-level b { margin-top: 3px; color: #17474d; }
+.criteria-score-summary { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.criteria-score-summary > div { padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,.78); box-shadow: 0 8px 18px rgba(20,51,65,.07); }
+.criteria-score-summary span, .criteria-score-summary strong { display: inline; margin: 0 !important; font-size: 12px !important; }
+.criteria-score-summary strong { float: right; color: #17474d !important; }
+.criteria-score-summary i { height: 5px; display: block; clear: both; margin-top: 7px; overflow: hidden; border-radius: 99px; background: rgba(0,107,128,.12); }
+.criteria-score-summary i b { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg,#256569,#48a8b8); }
+
+#resultsStage .list-card li { position: relative; margin: 9px 0; padding: 13px 14px 13px 42px; border-radius: 14px; background: #fff; box-shadow: 0 9px 22px rgba(20,51,65,.06); list-style: none; }
+#resultsStage .list-card li::before { content: "⚠"; position: absolute; left: 14px; top: 12px; color: #21835a; font-weight: 900; }
+#resultsStage .list-card--strengths li::before { content: "✓"; color: #21835a; }
+#resultsStage .list-card--issues li::before { content: "⚠"; color: #b16d15; }
+
+.recommendation-progress { margin: 0 0 22px; padding: 16px 18px; border-radius: 18px; background: rgba(0,107,128,.07); }
+.recommendation-progress > div:first-child { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 10px; }
+.recommendation-progress span { color: #607277; font-size: 13px; }
+.recommendation-card { transition: transform .2s ease, opacity .2s ease, box-shadow .2s ease; }
+.recommendation-card:hover { transform: translateY(-3px); }
+.recommendation-card.is-checked { opacity: .58; }
+
+.document-viewer { overflow-y: auto; }
+.pdf-evidence-page { position: relative; width: min(100%, 860px); margin: 12px auto 0; background: #dbe5e7; box-shadow: 0 18px 48px rgba(10,31,38,.18); }
+.pdf-evidence-page img { width: 100%; height: auto; display: block; }
+.pdf-evidence-highlight { position: absolute; z-index: 2; border: 2px solid #e09b18; border-radius: 4px; background: rgba(255,210,73,.38); box-shadow: 0 0 0 3px rgba(255,255,255,.55), 0 0 24px rgba(224,155,24,.55); pointer-events: none; animation: evidencePulse 1.4s ease-in-out 2; }
+@keyframes evidencePulse { 50% { background: rgba(255,191,0,.62); box-shadow: 0 0 0 6px rgba(255,217,95,.28); } }
+
+@media (max-width: 900px) {
+  #resultsStage .score-overview { grid-template-columns: 1fr; }
+  .criteria-score-summary { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+
+@media (max-width: 640px) {
+  #historyModal .modal-card { max-height: 94vh; padding: 24px 18px; }
+  .history-list--scroll { max-height: 64vh; }
+  .criteria-score-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .recommendation-progress > div:first-child { display: grid; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recommendation-card, .pdf-evidence-highlight { animation: none !important; transition: none !important; }
+}
+
 @media (max-width: 1040px) {
   .sidebar {
     position: fixed;

@@ -20,6 +20,9 @@ for (const id of [
   "historyModal",
   "metricsModal",
   "documentModal",
+  "documentPageImage",
+  "documentPageHighlight",
+  "recommendationProgressBar",
   "recommendationModal",
 ]) {
   assert(html.includes(`id="${id}"`), `Missing ${id}`);
@@ -45,6 +48,10 @@ assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual i
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
 assert(app.includes("data-show-evidence"), "Evidence navigation control is missing");
+assert(app.includes("getDocumentPagePreviewUrl"), "PDF evidence must use a rendered source page");
+assert(app.includes("item.bbox"), "PDF evidence highlight must use extraction bbox");
+assert(app.includes("DIGITAL_MENTOR_RECOMMENDATIONS"), "Recommendation state must persist in localStorage");
+assert(app.includes("saveRecommendationState"), "Recommendation changes must be persisted");
 assert(app.includes("source_type === \"pdf\""), "PDF-only viewer behavior is missing");
 assert(!app.includes("setMentor(voiceWillPlay ? \"speaking\" : \"success\", response.answer"), "Full chat answer must not be copied into mascot bubble");
 assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");

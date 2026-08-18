@@ -5,6 +5,9 @@ import logging
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import FileResponse, StreamingResponse
 from decimal import Decimal
+from pathlib import Path
+
+import fitz
 from fastapi import Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -258,6 +261,13 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
     ).scalars().all()
     extracted = load_extracted_payload(document)
     source_type = "pdf" if document.mime_type == "application/pdf" else "docx"
+    page_sizes: dict[int, tuple[float, float]] = {}
+    if source_type == "pdf" and Path(document.storage_path).exists():
+        with fitz.open(document.storage_path) as pdf:
+            page_sizes = {
+                index + 1: (float(page.rect.width), float(page.rect.height))
+                for index, page in enumerate(pdf)
+            }
     items: list[AnalysisEvidenceItem] = []
     seen: set[tuple] = set()
     for agent_result in agent_results:
@@ -281,6 +291,8 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
                         quote=quote,
                         block_index=block_index,
                         bbox=bbox,
+                        page_width=page_sizes.get(page, (None, None))[0] if page else None,
+                        page_height=page_sizes.get(page, (None, None))[1] if page else None,
                         source_type=source_type,
                         match_status=match_status if source_type == "pdf" else "fragment",
                     )

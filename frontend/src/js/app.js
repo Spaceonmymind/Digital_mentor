@@ -18,7 +18,7 @@ import {
   getAnalysisResult,
   getDetailedReportStatus,
   getDocument,
-  getDocumentSourceUrl,
+  getDocumentPagePreviewUrl,
   getPublicConfig,
   startDetailedReport,
   synthesizeAnalysisSpeech,
@@ -105,6 +105,8 @@ const elements = {
   summaryReportButton: document.getElementById("summaryReportButton"),
   summaryResetButton: document.getElementById("summaryResetButton"),
   criteriaList: document.getElementById("criteriaList"),
+  criteriaScoreSummary: document.getElementById("criteriaScoreSummary"),
+  projectLevel: document.getElementById("projectLevel"),
   strengthsList: document.getElementById("strengthsList"),
   improvementsList: document.getElementById("improvementsList"),
   documentText: document.getElementById("documentText"),
@@ -148,7 +150,9 @@ const elements = {
   documentModalClose: document.getElementById("documentModalClose"),
   documentEvidenceNotice: document.getElementById("documentEvidenceNotice"),
   documentEvidenceQuote: document.getElementById("documentEvidenceQuote"),
-  documentViewerFrame: document.getElementById("documentViewerFrame"),
+  documentPage: document.getElementById("documentPage"),
+  documentPageImage: document.getElementById("documentPageImage"),
+  documentPageHighlight: document.getElementById("documentPageHighlight"),
   errorTitle: document.getElementById("errorTitle"),
   errorDescription: document.getElementById("errorDescription"),
   errorRequestId: document.getElementById("errorRequestId"),
@@ -162,6 +166,11 @@ const elements = {
   recommendationModalEffect: document.getElementById("recommendationModalEffect"),
   recommendationModalComplexity: document.getElementById("recommendationModalComplexity"),
   recommendationModalAction: document.getElementById("recommendationModalAction"),
+  recommendationModalWhy: document.getElementById("recommendationModalWhy"),
+  recommendationModalCriterion: document.getElementById("recommendationModalCriterion"),
+  recommendationModalExample: document.getElementById("recommendationModalExample"),
+  recommendationProgressText: document.getElementById("recommendationProgressText"),
+  recommendationProgressBar: document.getElementById("recommendationProgressBar"),
   retryButton: document.getElementById("retryButton"),
   fullscreenButton: document.getElementById("fullscreenButton"),
   presenterPanel: document.getElementById("presenterPanel"),
@@ -681,6 +690,7 @@ function startElapsedTimer() {
 function renderResults(result) {
   const normalized = normalizeResult(result);
   state.result = normalized;
+  loadRecommendationState();
   state.remarks = normalized.remarks.length ? normalized.remarks : documentRemarks;
 
   elements.criteriaList.innerHTML = normalized.criteria
@@ -726,11 +736,27 @@ function renderResults(result) {
   const scorePercent = normalized.isMentorReport ? 50 : normalized.isDemoReport ? Math.round((normalized.overall_score / 60) * 100) : normalized.overall_score;
   ring.textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score}/60` : normalized.overall_score;
   ring.style.setProperty("--score-angle", `${Math.max(0, Math.min(100, scorePercent)) * 3.6}deg`);
+  elements.projectLevel.textContent = normalized.isMentorReport
+    ? `Стадия ${normalized.currentStage}`
+    : normalized.overall_score >= 51 ? "Высокая готовность" : normalized.overall_score >= 42 ? "Хорошая проработка" : "Требует доработки";
+  elements.criteriaScoreSummary.innerHTML = normalized.criteria.slice(0, 6).map((criterion) => {
+    const max = criterion.max_score || (normalized.isDemoReport ? 10 : 100);
+    const percent = Math.max(0, Math.min(100, Math.round((criterion.score / max) * 100)));
+    return `<div title="${scoreTooltip(criterion.score, max)}"><span>${criterion.code || "C"}</span><strong>${criterion.score}/${max}</strong><i><b style="width:${percent}%"></b></i></div>`;
+  }).join("");
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
   renderSummary(normalized);
   if (normalized.analysis_id) renderHistory();
+}
+
+function scoreTooltip(score, max = 10) {
+  const normalized = max === 10 ? score : Math.round((score / max) * 10);
+  if (normalized >= 9) return "Критерий раскрыт полностью";
+  if (normalized >= 7) return "Хорошая проработка";
+  if (normalized >= 4) return "Есть существенные пробелы";
+  return "Требуется серьезная переработка";
 }
 
 function normalizeResult(result) {
@@ -801,6 +827,7 @@ function normalizeDemoReportResult(result, report) {
     },
     recommendations: (report.recommendations || []).map((item, index) => ({
       priority: String(index + 1),
+      priorityLabel: index === 0 ? "Высокий" : index <= 2 ? "Средний" : "Низкий",
       title: item,
       effect: "Улучшит демонстрационную оценку",
       complexity: "Средняя",
@@ -830,8 +857,10 @@ function normalizeMentorReportResult(result, report) {
     currentStage,
     verdict: report.what_this_work_is || "Разбор сформирован.",
     criteria: stageItems.map((item) => ({
+      code: item.stage_code,
       title: `${item.stage_code} ${item.title}`,
       score: item.score,
+      max_score: 5,
       explanation: `${item.completed} До следующего уровня: ${item.next_level_requirement}`,
     })),
     strengths: report.what_survived || [],
@@ -856,6 +885,7 @@ function normalizeMentorReportResult(result, report) {
     recommendations: [
       {
         priority: "1",
+        priorityLabel: "Высокий",
         title: nextStep.step || "Сформулировать следующий проверяемый шаг.",
         effect: nextStep.check_result || "Появится проверяемое основание для следующей стадии.",
         complexity: "Средняя",
@@ -953,6 +983,33 @@ function getRecommendationAction(item) {
   return "Сформулируйте конкретное изменение, добавьте подтверждающие материалы и проверьте, что доработка отражена в выводах.";
 }
 
+function recommendationStorageKey() {
+  return `DIGITAL_MENTOR_RECOMMENDATIONS:${state.analysisId || "demo"}`;
+}
+
+function loadRecommendationState() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(recommendationStorageKey()) || "[]");
+    state.checkedRecommendations = new Set(saved.map(String));
+  } catch {
+    state.checkedRecommendations = new Set();
+  }
+}
+
+function saveRecommendationState() {
+  window.localStorage.setItem(recommendationStorageKey(), JSON.stringify([...state.checkedRecommendations]));
+}
+
+function recommendationCriterion(item) {
+  const index = Math.max(0, Number(getRecommendationNumber(item.priority)) - 1);
+  const criterion = state.result?.criteria?.[index];
+  return criterion ? `${criterion.code || `C${index + 1}`} · ${criterion.title}` : "Ключевой критерий отчета";
+}
+
+function recommendationExample(item) {
+  return `Добавьте в работу отдельный проверяемый фрагмент: «${truncateToSentence(getRecommendationAction(item), 120)}»`;
+}
+
 function openRecommendationModal(item) {
   if (!item) return;
   state.activeRecommendation = item;
@@ -963,6 +1020,10 @@ function openRecommendationModal(item) {
   elements.recommendationModalEffect.textContent = item.effect || "Повысит качество работы";
   elements.recommendationModalComplexity.textContent = item.complexity || "Средняя";
   elements.recommendationModalAction.textContent = getRecommendationAction(item);
+  elements.recommendationModalWhy.textContent = item.description || `Рекомендация сформирована из замечаний цифрового ментора: ${truncateToSentence(item.title, 180)}`;
+  elements.recommendationModalCriterion.textContent = recommendationCriterion(item);
+  elements.recommendationModalExample.textContent = recommendationExample(item);
+  elements.recommendationModalAccept.textContent = state.checkedRecommendations.has(String(item.priority)) ? "Отменить" : "Учту";
   elements.recommendationModal.hidden = false;
   document.body.classList.add("is-modal-open");
   elements.recommendationModalOk.focus();
@@ -974,25 +1035,30 @@ function closeRecommendationModal() {
 }
 
 function toggleRecommendationChecked(priority) {
+  priority = String(priority);
   if (state.checkedRecommendations.has(priority)) {
     state.checkedRecommendations.delete(priority);
   } else {
     state.checkedRecommendations.add(priority);
   }
+  saveRecommendationState();
   renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
 }
 
 function markRecommendationChecked(priority) {
-  state.checkedRecommendations.add(priority);
-  renderRecommendationPlan(state.result?.recommendations || recommendationPlan);
+  toggleRecommendationChecked(String(priority));
 }
 
 
 function renderRecommendationPlan(items = recommendationPlan) {
+  const completed = items.filter((item) => state.checkedRecommendations.has(String(item.priority))).length;
+  const percent = items.length ? Math.round((completed / items.length) * 100) : 0;
+  elements.recommendationProgressText.textContent = `${completed} из ${items.length} рекомендаций запланировано · ${percent}%`;
+  elements.recommendationProgressBar.style.width = `${percent}%`;
   elements.recommendationPlan.innerHTML = items
     .map(
       (item) => `
-        <article class="recommendation-card ${state.checkedRecommendations.has(item.priority) ? "is-checked" : ""}">
+        <article class="recommendation-card ${state.checkedRecommendations.has(String(item.priority)) ? "is-checked" : ""}">
           <div class="recommendation-card__top">
             <div class="recommendation-card__number">
               <strong>${getRecommendationNumber(item.priority)}</strong>
@@ -1001,12 +1067,13 @@ function renderRecommendationPlan(items = recommendationPlan) {
           </div>
           <p>${item.description || "Рекомендация поможет повысить качество итоговой работы."}</p>
           <div class="recommendation-card__meta">
+            <span>Приоритет: ${item.priorityLabel || (Number(getRecommendationNumber(item.priority)) === 1 ? "Высокий" : "Средний")}</span>
             <span>${item.effect}</span>
             <span>${item.complexity}</span>
           </div>
           <div class="recommendation-card__actions">
             <button class="button button--ghost" type="button" data-detail="${item.priority}">Подробнее</button>
-            <button class="button button--secondary" type="button" data-check-recommendation="${item.priority}">Учту</button>
+            <button class="button button--secondary" type="button" data-check-recommendation="${item.priority}">${state.checkedRecommendations.has(String(item.priority)) ? "✓ Учтено · Отменить" : "Учту"}</button>
           </div>
         </article>
       `,
@@ -1278,8 +1345,19 @@ function openEvidence(item) {
   elements.documentEvidenceNotice.textContent = item.match_status === "exact"
     ? "Точная цитата найдена в извлеченном текстовом слое."
     : isPdf && item.page ? "Связанный фрагмент находится на этой странице." : "Для DOCX показывается извлеченный фрагмент без выдуманной привязки к странице.";
-  elements.documentViewerFrame.hidden = !isPdf;
-  elements.documentViewerFrame.src = isPdf ? `${getDocumentSourceUrl(item.document_id)}${item.page ? `#page=${item.page}` : ""}` : "about:blank";
+  const canHighlight = isPdf && item.page && item.bbox && item.page_width && item.page_height;
+  elements.documentPage.hidden = !isPdf || !item.page;
+  elements.documentPageHighlight.hidden = !canHighlight;
+  if (isPdf && item.page) {
+    elements.documentPageImage.src = getDocumentPagePreviewUrl(item.document_id, item.page);
+  }
+  if (canHighlight) {
+    const [x0, y0, x1, y1] = item.bbox;
+    elements.documentPageHighlight.style.left = `${(x0 / item.page_width) * 100}%`;
+    elements.documentPageHighlight.style.top = `${(y0 / item.page_height) * 100}%`;
+    elements.documentPageHighlight.style.width = `${((x1 - x0) / item.page_width) * 100}%`;
+    elements.documentPageHighlight.style.height = `${((y1 - y0) / item.page_height) * 100}%`;
+  }
   elements.documentModal.hidden = false;
   document.body.classList.add("is-modal-open");
 }

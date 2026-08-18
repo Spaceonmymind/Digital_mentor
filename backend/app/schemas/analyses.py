@@ -103,6 +103,8 @@ class AnalysisEvidenceItem(BaseModel):
     quote: str | None = None
     block_index: int | None = None
     bbox: list[float] | None = None
+    page_width: float | None = None
+    page_height: float | None = None
     source_type: Literal["pdf", "docx"]
     match_status: Literal["exact", "page_only", "fragment"]
     extra: dict[str, Any] = {}

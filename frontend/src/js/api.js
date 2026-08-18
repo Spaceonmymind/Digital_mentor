@@ -86,6 +86,10 @@ export function getDocumentSourceUrl(documentId) {
   return `${API_BASE_URL}/documents/${documentId}/source`;
 }
 
+export function getDocumentPagePreviewUrl(documentId, pageNumber) {
+  return `${API_BASE_URL}/documents/${documentId}/pages/${pageNumber}/preview`;
+}
+
 
 export async function cancelAnalysis(analysisId) {
   const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/cancel`, {

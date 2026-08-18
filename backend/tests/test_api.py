@@ -744,6 +744,11 @@ async def test_analysis_history_metrics_and_source_are_read_only(client):
     assert source.content.startswith(b"%PDF")
     assert source.headers["content-disposition"].startswith("inline")
 
+    preview = await client.get(f"/api/v1/documents/{document['id']}/pages/1/preview")
+    assert preview.status_code == 200
+    assert preview.headers["content-type"] == "image/png"
+    assert preview.content.startswith(b"\x89PNG")
+
     evidence = await client.get(f"/api/v1/analyses/{analysis_id}/evidence")
     assert evidence.status_code == 200
     assert evidence.json() == []

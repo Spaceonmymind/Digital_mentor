@@ -6,7 +6,9 @@ from pathlib import Path, PurePath
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+
+import fitz
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -160,6 +162,34 @@ async def get_document_source(document_id: str, session: AsyncSession = Depends(
         filename=safe_name,
         content_disposition_type="inline",
     )
+
+
+@router.get("/{document_id}/pages/{page_number}/preview")
+async def get_document_page_preview(
+    document_id: str,
+    page_number: int,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    if document.mime_type != "application/pdf":
+        raise AppError("DOCUMENT_PREVIEW_UNSUPPORTED", "Постраничный просмотр доступен только для PDF", status_code=409)
+    path = Path(document.storage_path)
+    if not path.exists():
+        raise AppError("DOCUMENT_FILE_NOT_FOUND", "Исходный файл документа не найден", status_code=404)
+    try:
+        with fitz.open(path) as pdf:
+            if page_number < 1 or page_number > pdf.page_count:
+                raise AppError("DOCUMENT_PAGE_NOT_FOUND", "Страница документа не найдена", status_code=404)
+            page = pdf.load_page(page_number - 1)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(1.6, 1.6), alpha=False)
+            payload = pixmap.tobytes("png")
+    except AppError:
+        raise
+    except Exception as exc:
+        raise AppError("DOCUMENT_PREVIEW_FAILED", "Не удалось подготовить страницу документа", status_code=500) from exc
+    return Response(content=payload, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.delete("/{document_id}", response_model=DocumentResponse)

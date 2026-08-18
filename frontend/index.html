@@ -261,23 +261,27 @@
                     <div>
                       <p class="eyebrow">Текущая стадия</p>
                       <strong>S?</strong>
+                      <div class="project-level"><small>Уровень проекта</small><b id="projectLevel">Требует доработки</b></div>
                       <span>Работа выполнена на хорошем уровне</span>
                     </div>
-                    <div class="score-ring">87</div>
+                    <div class="score-overview">
+                      <div class="score-ring">87</div>
+                      <div class="criteria-score-summary" id="criteriaScoreSummary"></div>
+                    </div>
                   </section>
 
                   <section class="card criteria-card" id="resultCriteria">
-                    <h2>Путь работы по стадиям</h2>
+                    <h2>📈 Оценки по критериям</h2>
                     <div id="criteriaList"></div>
                   </section>
 
-                  <section class="card list-card">
-                    <h2>Что устояло</h2>
+                  <section class="card list-card list-card--strengths">
+                    <h2>💪 Сильные стороны</h2>
                     <ul id="strengthsList"></ul>
                   </section>
 
-                  <section class="card list-card">
-                    <h2>Главные возражения</h2>
+                  <section class="card list-card list-card--issues">
+                    <h2>⚠ Что мешает получить более высокий балл</h2>
                     <ul id="improvementsList"></ul>
                   </section>
                 </div>
@@ -313,8 +317,12 @@
                   <div class="section-heading">
                     <span data-icon="route"></span>
                     <div>
-                      <h2>Следующий шаг</h2>
+                      <h2>🛠 Что делать дальше</h2>
                     </div>
+                  </div>
+                  <div class="recommendation-progress">
+                    <div><strong>Прогресс доработки</strong><span id="recommendationProgressText">0 рекомендаций запланировано</span></div>
+                    <div class="progress"><span id="recommendationProgressBar" style="width: 0%"></span></div>
                   </div>
                   <div class="recommendation-grid" id="recommendationPlan"></div>
                 </section>
@@ -547,7 +555,15 @@
           </div>
         </div>
         <div class="modal-card__section">
-          <h3>Что сделать</h3>
+          <h3>Почему появилась рекомендация</h3>
+          <p id="recommendationModalWhy"></p>
+        </div>
+        <div class="modal-card__grid">
+          <div><span>Улучшает критерий</span><strong id="recommendationModalCriterion"></strong></div>
+          <div><span>Пример изменения</span><strong id="recommendationModalExample"></strong></div>
+        </div>
+        <div class="modal-card__section">
+          <h3>Что именно изменить</h3>
           <p id="recommendationModalAction"></p>
         </div>
         <div class="modal-card__actions">
@@ -571,7 +587,7 @@
         <p class="eyebrow">Сохраненные результаты</p>
         <h2 id="historyModalTitle">История анализов</h2>
         <p class="history-limitation">До появления авторизации история относится ко всему текущему развертыванию, а не к отдельному пользователю.</p>
-        <div class="history-list" id="historyModalList"></div>
+        <div class="history-list history-list--scroll" id="historyModalList"></div>
       </section>
     </div>
     <div class="modal-overlay" id="documentModal" hidden>
@@ -581,7 +597,10 @@
         <h2 id="documentModalTitle">Исходный документ</h2>
         <p id="documentEvidenceNotice"></p>
         <blockquote id="documentEvidenceQuote"></blockquote>
-        <iframe id="documentViewerFrame" title="Исходный PDF" hidden></iframe>
+        <div class="pdf-evidence-page" id="documentPage" hidden>
+          <img id="documentPageImage" alt="Страница исходного PDF" />
+          <span class="pdf-evidence-highlight" id="documentPageHighlight" aria-label="Связанный фрагмент"></span>
+        </div>
       </section>
     </div>
     <aside class="presenter-panel" id="presenterPanel" hidden aria-label="Панель ведущего">

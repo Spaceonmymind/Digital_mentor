@@ -336,6 +336,25 @@ class ReportService:
                 y += self.line_height
                 continue
 
+            block_height = len(wrapped_lines) * (self.line_height if fontsize <= 11 else self.line_height + 5) + spacing_after
+            if y + block_height > self.page_height - self.margin:
+                page = self._new_page(doc)
+                y = self.margin
+            if is_section:
+                page.draw_rect(
+                    fitz.Rect(self.margin - 10, y - 15, self.page_width - self.margin + 10, y + block_height - 2),
+                    color=(0.82, 0.91, 0.92),
+                    fill=(0.93, 0.97, 0.97),
+                    width=0.8,
+                )
+            elif raw_line.startswith("-"):
+                page.draw_rect(
+                    fitz.Rect(self.margin - 7, y - 11, self.page_width - self.margin + 7, y + block_height - 3),
+                    color=(0.9, 0.92, 0.92),
+                    fill=(0.985, 0.99, 0.99),
+                    width=0.5,
+                )
+
             for line in wrapped_lines:
                 if y > self.page_height - self.margin:
                     page = self._new_page(doc)
@@ -358,6 +377,16 @@ class ReportService:
         page = doc.new_page(width=self.page_width, height=self.page_height)
         page.insert_font(fontname="Golos", fontfile=str(self.font_regular))
         page.insert_font(fontname="GolosBold", fontfile=str(self.font_bold))
+        page.draw_rect(
+            fitz.Rect(0, 0, self.page_width, 22),
+            color=(0.08, 0.34, 0.36),
+            fill=(0.08, 0.34, 0.36),
+        )
+        page.draw_rect(
+            fitz.Rect(0, self.page_height - 14, self.page_width, self.page_height),
+            color=(0.88, 0.94, 0.94),
+            fill=(0.88, 0.94, 0.94),
+        )
         return page
 
     def _wrap_line(self, text: str, font: fitz.Font, fontsize: int) -> list[str]:

@@ -1104,4 +1104,8 @@ LATER:
 - `GET /api/v1/analyses/{analysis_id}/metrics` aggregates saved `llm_calls` and analysis timestamps without returning prompts, responses, or secrets.
 - `GET /api/v1/analyses/{analysis_id}/evidence` maps saved agent evidence to extracted PDF blocks or DOCX paragraphs. PDF evidence can navigate to a real source page; DOCX uses an extracted-fragment panel because no page mapping exists.
 - `GET /api/v1/documents/{document_id}/source` serves the retained original document inline for the evidence viewer.
+- History uses a bounded modal scroll area so long server-backed lists remain usable on laptop-sized screens.
+- PDF evidence uses `GET /api/v1/documents/{document_id}/pages/{page_number}/preview` to render the real retained source page with PyMuPDF; the frontend positions a visible highlight from the extracted block `bbox` and stored page dimensions.
+- The demo report overview includes project readiness, six compact score indicators, richer criterion cards, and persistent per-analysis recommendation planning stored in browser localStorage. This planning progress does not affect AI scoring.
+- Generated PDF reports use branded page bands, section panels, and compact item cards while preserving the same saved report content.
 - No database migration, new LLM call, methodology/scoring change, model change, or TTS configuration change was required.
