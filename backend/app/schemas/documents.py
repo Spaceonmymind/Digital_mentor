@@ -9,6 +9,7 @@ class DocumentResponse(BaseModel):
     mime_type: str
     size: int
     status: str
+    extraction_status: str | None = None
     created_at: datetime
 
 

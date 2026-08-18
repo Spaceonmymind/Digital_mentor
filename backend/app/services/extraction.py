@@ -43,14 +43,17 @@ class TextExtractionService:
                         "bbox": [float(x0), float(y0), float(x1), float(y1)],
                     }
                 )
-            page_text = page.get_text("text").strip()
+            page_text = "\n".join(block["text"] for block in blocks).strip()
             if page_text:
                 full_text_parts.append(page_text)
             pages.append({"page_number": page_index, "text": page_text, "blocks": blocks})
 
         full_text = "\n\n".join(full_text_parts).strip()
         if not full_text:
+            doc.close()
             raise AppError("DOCUMENT_TEXT_NOT_FOUND", "В PDF не найден текстовый слой", status_code=422)
+
+        doc.close()
 
         return {
             "document_id": document_id,

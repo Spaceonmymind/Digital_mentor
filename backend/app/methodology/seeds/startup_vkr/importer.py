@@ -1,37 +1,63 @@
+from types import ModuleType
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate
-from app.methodology.seeds.startup_vkr.data import AGENTS, CRITERIA, METHODOLOGY_ID, METHODOLOGY_VERSION, PROMPTS, SOURCE, VERSION
+from app.methodology.seeds.startup_vkr import data as legacy_data
+from app.methodology.seeds.startup_vkr import data_v2
 
 
 async def ensure_startup_vkr_seed(session: AsyncSession) -> Methodology:
+    existing_versions = (
+        await session.execute(select(Methodology).where(Methodology.code == "STARTUP_VKR"))
+    ).scalars().all()
+    for existing in existing_versions:
+        existing.is_active = False
+        session.add(existing)
+    await _upsert_version(session, legacy_data, active=False)
+    methodology = await _upsert_version(session, data_v2, active=True)
+    await session.commit()
+    await session.refresh(methodology)
+    return methodology
+
+
+async def _upsert_version(session: AsyncSession, data: ModuleType, *, active: bool) -> Methodology:
     methodology = (
-        await session.execute(select(Methodology).where(Methodology.code == "STARTUP_VKR", Methodology.version == METHODOLOGY_VERSION).limit(1))
+        await session.execute(
+            select(Methodology).where(
+                Methodology.code == "STARTUP_VKR",
+                Methodology.version == data.METHODOLOGY_VERSION,
+            ).limit(1)
+        )
     ).scalar_one_or_none()
     if methodology is None:
-        methodology = Methodology(id=METHODOLOGY_ID, code="STARTUP_VKR")
+        methodology = Methodology(id=data.METHODOLOGY_ID, code="STARTUP_VKR")
     methodology.name = "ВКР как стартап"
-    methodology.version = METHODOLOGY_VERSION
-    methodology.description = "Методология проверки ВКР как проектного обоснования стартапа по Анти-Дюринг: method 1.26, implementation 1.10."
-    methodology.is_active = True
+    methodology.version = data.METHODOLOGY_VERSION
+    methodology.description = (
+        "Методология анализа документа ВКР в виде стартап-проекта по регламенту Финансового университета."
+        if data.METHODOLOGY_VERSION == "2.0"
+        else "Методология проверки ВКР как проектного обоснования стартапа по Анти-Дюринг."
+    )
+    methodology.is_active = active
     methodology.is_demo = False
-    methodology.source = SOURCE
+    methodology.source = data.SOURCE
     session.add(methodology)
 
-    for prompt_data in PROMPTS:
+    for prompt_data in data.PROMPTS:
         prompt = await session.get(PromptTemplate, prompt_data["id"])
         if prompt is None:
             prompt = PromptTemplate(id=prompt_data["id"], methodology_id=methodology.id)
         prompt.stage = prompt_data["stage"]
         prompt.system_prompt = prompt_data["system_prompt"]
         prompt.user_template = prompt_data["user_template"]
-        prompt.version = VERSION
+        prompt.version = data.VERSION
         prompt.is_demo = False
-        prompt.source = SOURCE
+        prompt.source = data.SOURCE
         session.add(prompt)
 
-    for criterion_data in CRITERIA:
+    for criterion_data in data.CRITERIA:
         criterion = await session.get(MethodologyCriterion, criterion_data["id"])
         if criterion is None:
             criterion = MethodologyCriterion(id=criterion_data["id"], methodology_id=methodology.id)
@@ -41,10 +67,21 @@ async def ensure_startup_vkr_seed(session: AsyncSession) -> Methodology:
         criterion.weight = None
         criterion.order_index = criterion_data["order_index"]
         criterion.is_demo = False
-        criterion.source = SOURCE
-        criterion.version = VERSION
+        criterion.source = data.SOURCE
+        criterion.version = data.VERSION
         session.add(criterion)
-        for indicator_data in criterion_data["indicators"]:
+        for order_index, raw_indicator in enumerate(criterion_data["indicators"], start=1):
+            if isinstance(raw_indicator, tuple):
+                suffix, title, description, expected_result = raw_indicator
+                indicator_data = {
+                    "id": f"{criterion_data['id']}-{suffix}",
+                    "title": title,
+                    "description": description,
+                    "expected_result": expected_result,
+                    "order_index": order_index,
+                }
+            else:
+                indicator_data = raw_indicator
             indicator = await session.get(MethodologyIndicator, indicator_data["id"])
             if indicator is None:
                 indicator = MethodologyIndicator(id=indicator_data["id"], criterion_id=criterion.id)
@@ -55,29 +92,21 @@ async def ensure_startup_vkr_seed(session: AsyncSession) -> Methodology:
             indicator.order_index = indicator_data["order_index"]
             indicator.required = True
             indicator.is_demo = False
-            indicator.source = SOURCE
-            indicator.version = VERSION
+            indicator.source = data.SOURCE
+            indicator.version = data.VERSION
             session.add(indicator)
 
-    for agent_data in AGENTS:
+    for agent_data in data.AGENTS:
         (
-            agent_id,
-            code,
-            name,
-            stage_code,
-            execution_order,
-            execution_mode,
-            model_role,
-            prompt_template_id,
-            input_schema_code,
-            output_schema_code,
+            agent_id, code, name, stage_code, execution_order, execution_mode,
+            model_role, prompt_template_id, input_schema_code, output_schema_code,
         ) = agent_data
         agent = await session.get(MethodologyAgent, agent_id)
         if agent is None:
             agent = MethodologyAgent(id=agent_id, methodology_id=methodology.id)
         agent.code = code
         agent.name = name
-        agent.version = VERSION
+        agent.version = data.VERSION
         agent.stage_code = stage_code
         agent.execution_order = execution_order
         agent.execution_mode = execution_mode
@@ -88,9 +117,7 @@ async def ensure_startup_vkr_seed(session: AsyncSession) -> Methodology:
         agent.is_active = True
         agent.is_required = True
         agent.is_demo = False
-        agent.source = SOURCE
+        agent.source = data.SOURCE
         session.add(agent)
 
-    await session.commit()
-    await session.refresh(methodology)
     return methodology

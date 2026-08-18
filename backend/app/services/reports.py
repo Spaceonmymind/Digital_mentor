@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisResult, Document
 from app.schemas.reports import ReportResponse
+from app.services.document_context import document_fragments_for_report
 from app.services.storage import DocumentStorage
 
 
@@ -35,6 +36,28 @@ class ReportService:
             analysis_id=analysis.id,
             format="pdf",
             report_url=f"/api/v1/analyses/{analysis.id}/reports/{report_id}",
+            created_at=datetime.now(timezone.utc),
+        )
+
+    def create_detailed_pdf_report(
+        self,
+        analysis: Analysis,
+        document: Document,
+        result: AnalysisResult,
+        report_id: str | None = None,
+    ) -> ReportResponse:
+        if analysis.status != "completed":
+            raise AppError("ANALYSIS_NOT_COMPLETED", "Результат еще не сформирован", status_code=409)
+
+        report_id = report_id or str(uuid4())
+        output_path = self.storage.report_path(analysis.id, report_id)
+        lines = self._build_detailed_lines(analysis, document, result.result_json)
+        output_path.write_bytes(self._render_pdf(lines))
+        return ReportResponse(
+            report_id=report_id,
+            analysis_id=analysis.id,
+            format="pdf",
+            report_url=f"/api/v1/analyses/{analysis.id}/detailed-report/download",
             created_at=datetime.now(timezone.utc),
         )
 
@@ -169,7 +192,7 @@ class ReportService:
     def _build_demo_report_lines(self, document: Document, report: dict) -> list[str]:
         lines = [
             "ЦИФРОВОЙ МЕНТОР",
-            "Demo-разбор работы",
+            "Предварительная оценка документа ВКР-стартапа",
             "",
             f"Работа: {document.original_name}",
             f"Общий балл: {report.get('overall_score')} / 60",
@@ -177,16 +200,153 @@ class ReportService:
             "Оценки по критериям:",
         ]
         for item in report.get("criteria", []):
-            lines.append(f"- {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
-        lines.extend(["", "3 сильные стороны:"])
+            lines.append(f"- {item.get('code')}. {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
+            for strength in item.get("strengths", []):
+                lines.append(f"  Сильная сторона: {strength}")
+            for issue in item.get("issues", []):
+                lines.append(f"  Требует доработки: {issue}")
+        lines.extend(["", "Сильные стороны:"])
         lines.extend(f"- {item}" for item in report.get("strengths", []))
-        lines.extend(["", "3 замечания:"])
+        lines.extend(["", "Что требует доработки:"])
         lines.extend(f"- {item}" for item in report.get("remarks", []))
-        lines.extend(["", "3 рекомендации:"])
+        lines.extend(["", "Приоритетные рекомендации:"])
         lines.extend(f"- {item}" for item in report.get("recommendations", []))
         lines.extend(["", "Итоговое заключение:", report.get("conclusion") or ""])
-        lines.extend(["", "Отметка: demo-режим использует сокращенный мультиагентный анализ и не заменяет полный expert-разбор."])
+        lines.extend(["", report.get("disclaimer") or "Предварительная аналитическая оценка не заменяет решение ГЭК."])
         return lines
+
+    def _build_detailed_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
+        extra = payload.get("extra_blocks") or {}
+        demo_report = extra.get("demo_report") or {}
+        mentor_report = extra.get("mentor_report") or {}
+        source_report = demo_report or mentor_report
+        fragments = document_fragments_for_report(document, payload)
+
+        lines = [
+            "ЦИФРОВОЙ МЕНТОР",
+            "Подробный аналитический отчет",
+            "",
+            f"Работа: {document.original_name}",
+            f"Дата анализа: {analysis.completed_at or analysis.created_at}",
+            f"Методология: {(payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {(payload.get('methodology') or {}).get('methodology_version', analysis.methodology_version)}",
+            "",
+            "1. Краткое заключение:",
+            payload.get("verdict") or source_report.get("conclusion") or source_report.get("what_this_work_is") or "",
+            "",
+            "2. Оценки и разбор критериев:",
+        ]
+        if demo_report.get("criteria"):
+            for item in demo_report.get("criteria", []):
+                lines.extend(
+                    [
+                        f"- {item.get('name')}: {item.get('score')} / 10",
+                        f"  Комментарий: {item.get('comment')}",
+                        *[f"  Сильная сторона: {value}" for value in item.get("strengths", [])],
+                        *[f"  Требует доработки: {value}" for value in item.get("issues", [])],
+                    ]
+                )
+        else:
+            for item in payload.get("criteria", []):
+                lines.extend(
+                    [
+                        f"- {item.get('title')}: {item.get('score')} / {item.get('max_score', 100)}",
+                        f"  Комментарий: {item.get('explanation', '')}",
+                    ]
+                )
+
+        lines.extend(["", "3. Сильные стороны с пояснениями:"])
+        for item in payload.get("strengths") or source_report.get("strengths") or source_report.get("what_survived") or []:
+            lines.extend([f"- {item}", "  Как усилить: привяжите этот элемент к конкретному месту документа и покажите, почему он выдерживает критическую проверку."])
+
+        lines.extend(["", "4. Замечания и риски:"])
+        remarks = payload.get("remarks") or [{"title": item} for item in source_report.get("remarks", [])]
+        for item in remarks:
+            title = item.get("title") or ""
+            recommendation = item.get("recommendation") or "Уточнить доказательство, механизм и проверяемый результат."
+            lines.extend(
+                [
+                    f"- {title}",
+                    f"  Почему это важно: без этого вывода эксперт не сможет отличить работоспособную конструкцию от декларации.",
+                    f"  Совет: {recommendation}",
+                ]
+            )
+
+        lines.extend(["", "5. Рекомендации к доработке:"])
+        recommendations = payload.get("recommendations") or [{"title": item} for item in source_report.get("recommendations", [])]
+        for item in recommendations:
+            lines.extend(
+                [
+                    f"- {item.get('title') or item}",
+                    f"  Ожидаемый эффект: {item.get('effect') or 'повысит проверяемость и убедительность работы.'}",
+                    f"  Практический шаг: оформите изменение как конкретный фрагмент текста, таблицу, схему или расчет.",
+                ]
+            )
+
+        lines.extend(["", "6. Конкретные фрагменты текста и как их править:"])
+        if fragments:
+            for index, fragment in enumerate(fragments, start=1):
+                location = []
+                if fragment.get("page"):
+                    location.append(f"стр. {fragment.get('page')}")
+                if fragment.get("section"):
+                    location.append(str(fragment.get("section")))
+                location_label = ", ".join(location) or f"блок {fragment.get('block_index')}"
+                why, action = self._fragment_guidance(fragment.get("text") or "")
+                lines.extend(
+                    [
+                        f"Фрагмент {index} — {location_label}:",
+                        f"Цитата: {fragment.get('text') or ''}",
+                        f"Почему этот фрагмент важен: {why}",
+                        f"Что рекомендуется изменить: {action}",
+                        "",
+                    ]
+                )
+        else:
+            lines.append("Извлеченный текст документа недоступен для приложения к подробному отчету.")
+
+        lines.extend(
+            [
+                "",
+                "7. Предлагаемые схемы для доработки:",
+                "- Схема механизма результата: входные данные -> действие сервиса -> проверяемый результат.",
+                "- Схема доверия: участник -> что видит -> что может изменить -> чем ограничены полномочия.",
+                "- Таблица go/no-go: условие -> порог -> источник данных -> решение.",
+                "",
+                "8. Ограничения:",
+                "- Подробный отчет использует быстрый результат анализа и фрагменты исходного текста документа.",
+                "- Он не блокирует быстрый demo-результат и может быть пересобран отдельно.",
+                "- Финальные выводы требуют проверки человеком.",
+            ]
+        )
+        return lines
+
+    @staticmethod
+    def _fragment_guidance(text: str) -> tuple[str, str]:
+        normalized = text.lower()
+        if any(term in normalized for term in ("руб", "выруч", "затрат", "финанс", "окупаем")):
+            return (
+                "Он влияет на проверяемость финансовой реализуемости проекта.",
+                "Добавьте источник исходных чисел, период расчета, формулу и сценарий проверки допущений.",
+            )
+        if any(term in normalized for term in ("рынок", "клиент", "аудитор", "конкурент", "спрос")):
+            return (
+                "Он используется как основание для оценки рынка и подтверждения потребности.",
+                "Свяжите утверждение с исследованием, выборкой, датой и измеримым результатом проверки гипотезы.",
+            )
+        if any(term in normalized for term in ("риск", "угроз", "огранич", "отказ")):
+            return (
+                "Он определяет, насколько реалистично описаны ограничения и сценарии развития.",
+                "Укажите вероятность, последствия, владельца риска и конкретную меру снижения.",
+            )
+        if any(term in normalized for term in ("технолог", "архитект", "алгоритм", "данн", "mvp")):
+            return (
+                "Он подтверждает технический механизм и реализуемость продукта.",
+                "Покажите входные данные, последовательность обработки, измеримый результат и ограничения решения.",
+            )
+        return (
+            "Он связан с одним из выводов отчета и требует более проверяемого обоснования.",
+            "Добавьте проверяемый источник, метрику, расчет или конкретный механизм.",
+        )
 
     def _render_pdf(self, lines: list[str]) -> bytes:
         doc = fitz.open()
@@ -206,6 +366,25 @@ class ReportService:
             if not wrapped_lines:
                 y += self.line_height
                 continue
+
+            block_height = len(wrapped_lines) * (self.line_height if fontsize <= 11 else self.line_height + 5) + spacing_after
+            if y + block_height > self.page_height - self.margin:
+                page = self._new_page(doc)
+                y = self.margin
+            if is_section:
+                page.draw_rect(
+                    fitz.Rect(self.margin - 10, y - 15, self.page_width - self.margin + 10, y + block_height - 2),
+                    color=(0.82, 0.91, 0.92),
+                    fill=(0.93, 0.97, 0.97),
+                    width=0.8,
+                )
+            elif raw_line.startswith("-"):
+                page.draw_rect(
+                    fitz.Rect(self.margin - 7, y - 11, self.page_width - self.margin + 7, y + block_height - 3),
+                    color=(0.9, 0.92, 0.92),
+                    fill=(0.985, 0.99, 0.99),
+                    width=0.5,
+                )
 
             for line in wrapped_lines:
                 if y > self.page_height - self.margin:
@@ -229,6 +408,16 @@ class ReportService:
         page = doc.new_page(width=self.page_width, height=self.page_height)
         page.insert_font(fontname="Golos", fontfile=str(self.font_regular))
         page.insert_font(fontname="GolosBold", fontfile=str(self.font_bold))
+        page.draw_rect(
+            fitz.Rect(0, 0, self.page_width, 22),
+            color=(0.08, 0.34, 0.36),
+            fill=(0.08, 0.34, 0.36),
+        )
+        page.draw_rect(
+            fitz.Rect(0, self.page_height - 14, self.page_width, self.page_height),
+            color=(0.88, 0.94, 0.94),
+            fill=(0.88, 0.94, 0.94),
+        )
         return page
 
     def _wrap_line(self, text: str, font: fitz.Font, fontsize: int) -> list[str]:

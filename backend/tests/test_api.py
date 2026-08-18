@@ -8,10 +8,11 @@ from docx import Document as DocxDocument
 from sqlalchemy import select
 
 from app.api.v1 import documents as documents_api
+from app.api.v1.analyses import _fallback_pdf_evidence, _locate_evidence
 from app.api.v1 import internal_llm as internal_llm_api
 from app.assessment.models import Assessment
 from app.db.models import Analysis
-from app.db.models import AnalysisEvent, LLMCall
+from app.db.models import AnalysisEvent, AnalysisResult, LLMCall
 from app.db.session import async_session_factory
 from app.llm.errors import LLMConfigurationError
 from app.llm.registry import AGGREGATOR, WORKER
@@ -19,6 +20,7 @@ from app.llm.schemas import LLMResult, LLMTestStructuredResponse, LLMUsage
 from app.main import app
 from app.methodology.models import Methodology, MethodologyCriterion, MethodologyIndicator, PromptTemplate
 from app.pipeline.artifact_resolver import ArtifactResolver
+from app.services import chat_service
 
 
 def make_pdf_bytes(text: str = "Методы исследования\nДля анализа был использован сравнительный подход.") -> bytes:
@@ -40,10 +42,51 @@ def make_docx_bytes(text: str = "Методы исследования") -> byte
     return buffer.getvalue()
 
 
+def test_pdf_evidence_location_uses_exact_quote_and_bbox():
+    payload = {
+        "pages": [
+            {
+                "page_number": 3,
+                "blocks": [
+                    {"block_index": 7, "text": "Проверяемая цитата из финансовой модели", "bbox": [1, 2, 3, 4]}
+                ],
+            }
+        ]
+    }
+    assert _locate_evidence(payload, "цитата из финансовой модели", None) == (3, 7, [1, 2, 3, 4], "exact")
+
+
+def test_pdf_evidence_fallback_uses_real_relevant_block_and_bbox():
+    payload = {
+        "pages": [
+            {"page_number": 1, "blocks": [{"block_index": 1, "text": "Общее описание документа без финансовых показателей и расчетов.", "bbox": [1, 2, 30, 40]}]},
+            {"page_number": 4, "blocks": [{"block_index": 8, "text": "Финансовая модель содержит выручку, затраты, инвестиции и расчет окупаемости проекта.", "bbox": [10, 20, 300, 80]}]},
+        ]
+    }
+    page, block_index, bbox, quote = _fallback_pdf_evidence(payload, "C5")
+    assert (page, block_index, bbox) == (4, 8, [10, 20, 300, 80])
+    assert quote.startswith("Финансовая модель")
+
+
 async def upload_pdf(client):
     response = await client.post(
         "/api/v1/documents",
         files={"upload": ("work.pdf", make_pdf_bytes(), "application/pdf")},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def upload_docx(client):
+    response = await client.post(
+        "/api/v1/documents",
+        files={
+            "upload": (
+                "work.docx",
+                make_docx_bytes("Методы исследования\nДля анализа был использован сравнительный подход."),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -565,7 +608,7 @@ async def test_reject_file_over_size_limit(client):
 
 @pytest.mark.asyncio
 async def test_create_analysis_progress_and_result(client):
-    document = await upload_pdf(client)
+    document = await upload_docx(client)
     create_response = await client.post(
         "/api/v1/analyses",
         json={
@@ -612,6 +655,33 @@ async def test_create_analysis_progress_and_result(client):
     assert "Итоговый отчет" in extracted_text
     assert "Общий балл" in extracted_text
 
+    detailed_response = await client.post(f"/api/v1/analyses/{analysis_id}/detailed-report")
+    assert detailed_response.status_code == 200, detailed_response.text
+    detailed_status = detailed_response.json()
+    assert detailed_status["status"] in {"pending", "running", "completed"}
+
+    for _ in range(20):
+        status_response = await client.get(f"/api/v1/analyses/{analysis_id}/detailed-report/status")
+        assert status_response.status_code == 200, status_response.text
+        detailed_status = status_response.json()
+        if detailed_status["status"] == "completed":
+            break
+        await asyncio.sleep(0.05)
+    assert detailed_status["status"] == "completed"
+    assert detailed_status["report_url"] == f"/api/v1/analyses/{analysis_id}/detailed-report/download"
+
+    detailed_pdf_response = await client.get(detailed_status["report_url"])
+    assert detailed_pdf_response.status_code == 200
+    assert detailed_pdf_response.content.startswith(b"%PDF")
+    detailed_pdf = fitz.open(stream=detailed_pdf_response.content, filetype="pdf")
+    detailed_text = "\n".join(page.get_text() for page in detailed_pdf)
+    detailed_pdf.close()
+    assert "Подробный аналитический отчет" in detailed_text
+    assert "Конкретные фрагменты текста" in detailed_text
+    assert "Для анализа был использован сравнительный подход" in detailed_text
+    assert "Почему этот фрагмент важен" in detailed_text
+    assert "Что рекомендуется изменить" in detailed_text
+
 
 @pytest.mark.asyncio
 async def test_create_analysis_missing_document(client):
@@ -626,6 +696,76 @@ async def test_create_analysis_missing_document(client):
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_analysis_history_metrics_and_source_are_read_only(client):
+    document = await upload_pdf(client)
+    create_response = await client.post(
+        "/api/v1/analyses",
+        json={
+            "document_id": document["id"],
+            "analysis_type": "mentor",
+            "methodology_id": "STARTUP_VKR",
+            "methodology_version": "2.0",
+            "mode": "demo",
+        },
+    )
+    analysis_id = create_response.json()["analysis_id"]
+    await wait_for_completed_analysis(client, analysis_id)
+    async with async_session_factory() as session:
+        session.add(
+            LLMCall(
+                model="openai/gpt-test",
+                requested_model="openai/gpt-test",
+                actual_model="gpt-test",
+                aggregator="polza",
+                provider="openai",
+                analysis_id=analysis_id,
+                agent_code="A-01",
+                prompt_tokens=100,
+                completion_tokens=40,
+                total_tokens=140,
+                cached_tokens=10,
+                cost_rub=Decimal("1.250000"),
+                latency_ms=900,
+                status="success",
+            )
+        )
+        await session.commit()
+
+    history = await client.get("/api/v1/analyses/history?limit=10&offset=0")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 1
+    assert history_payload["items"][0]["analysis_id"] == analysis_id
+    assert history_payload["items"][0]["document_name"] == "work.pdf"
+    assert history_payload["items"][0]["overall_score"] == 87
+
+    metrics = await client.get(f"/api/v1/analyses/{analysis_id}/metrics")
+    assert metrics.status_code == 200, metrics.text
+    metrics_payload = metrics.json()
+    assert metrics_payload["llm_calls_count"] == 1
+    assert metrics_payload["total_tokens"] == 140
+    assert metrics_payload["cost_rub"] == "1.250000"
+    assert metrics_payload["agents"][0]["agent_code"] == "A-01"
+    serialized = metrics.text.lower()
+    assert "prompt" not in serialized
+    assert "api_key" not in serialized
+
+    source = await client.get(f"/api/v1/documents/{document['id']}/source")
+    assert source.status_code == 200
+    assert source.content.startswith(b"%PDF")
+    assert source.headers["content-disposition"].startswith("inline")
+
+    preview = await client.get(f"/api/v1/documents/{document['id']}/pages/1/preview")
+    assert preview.status_code == 200
+    assert preview.headers["content-type"] == "image/png"
+    assert preview.content.startswith(b"\x89PNG")
+
+    evidence = await client.get(f"/api/v1/analyses/{analysis_id}/evidence")
+    assert evidence.status_code == 200
+    assert evidence.json() == []
 
 
 @pytest.mark.asyncio
@@ -663,15 +803,15 @@ async def test_delete_document(client):
 
 
 @pytest.mark.asyncio
-async def test_tts_stub(client):
+async def test_tts_falls_back_without_provider(client):
     response = await client.post("/api/v1/tts", json={"text": "Анализ завершен", "voice_id": "mentor-default"})
     assert response.status_code == 200, response.text
     payload = response.json()
+    assert payload["status"] == "fallback"
     assert payload["format"] == "mp3"
-    assert payload["provider"] == "stub"
-    audio_response = await client.get(payload["audio_url"])
-    assert audio_response.status_code == 200
-    assert audio_response.content.startswith(b"ID3")
+    assert payload["provider"] == "browser"
+    assert payload["source"] == "browser"
+    assert payload["audio_url"] is None
 
 
 @pytest.mark.asyncio
@@ -703,3 +843,61 @@ async def test_chat_response_for_analysis(client):
     payload = response.json()
     assert payload["message_id"]
     assert "90" in payload["answer"]
+
+
+@pytest.mark.asyncio
+async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeypatch):
+    captured = {}
+
+    class FakeChatLLM:
+        async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
+            captured["user_prompt"] = user_prompt
+            captured["max_completion_tokens"] = kwargs.get("max_completion_tokens")
+            return LLMResult(
+                output=response_model(answer="Покажите фрагмент про сравнительный подход и добавьте критерии проверки."),
+                provider_response_id="chat-test",
+                requested_model=model,
+                actual_model=model,
+                aggregator=AGGREGATOR,
+                provider="fake",
+                finish_reason="stop",
+                usage=LLMUsage(prompt_tokens=10, completion_tokens=5, total_tokens=15, cost_rub=Decimal("0.01")),
+                latency_ms=1,
+                status="success",
+            )
+
+    monkeypatch.setattr(chat_service, "LLMClient", lambda: FakeChatLLM())
+    document = await upload_docx(client)
+    create_response = await client.post(
+        "/api/v1/analyses",
+        json={
+            "document_id": document["id"],
+            "analysis_type": "mentor",
+            "methodology_id": "mentor-default",
+            "methodology_version": "draft",
+        },
+    )
+    analysis_id = create_response.json()["analysis_id"]
+    await wait_for_completed_analysis(client, analysis_id)
+    async with async_session_factory() as session:
+        analysis = await session.get(Analysis, analysis_id)
+        analysis.methodology_id = "STARTUP_VKR"
+        result = (
+            await session.execute(select(AnalysisResult).where(AnalysisResult.analysis_id == analysis_id).limit(1))
+        ).scalar_one()
+        result.result_json = {
+            **result.result_json,
+            "remarks": [{"title": "Недостаточно раскрыт сравнительный подход", "recommendation": "Добавить критерии проверки."}],
+        }
+        session.add_all([analysis, result])
+        await session.commit()
+
+    response = await client.post(
+        "/api/v1/chat/messages",
+        json={"analysis_id": analysis_id, "message": "Какой фрагмент текста мне править?"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert "Релевантные фрагменты исходного документа" in captured["user_prompt"]
+    assert "Для анализа был использован сравнительный подход" in captured["user_prompt"]
+    assert captured["max_completion_tokens"] == 2200

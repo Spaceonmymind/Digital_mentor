@@ -74,6 +74,22 @@ class AnalysisResult(Base):
     analysis: Mapped[Analysis] = relationship(back_populates="result")
 
 
+class DetailedReport(Base):
+    __tablename__ = "detailed_reports"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    analysis_id: Mapped[str] = mapped_column(String(36), ForeignKey("analyses.id"), nullable=False, unique=True)
+    report_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, default=lambda: str(uuid4()))
+    status: Mapped[str] = mapped_column(String(64), nullable=False, default="pending")
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    format: Mapped[str] = mapped_column(String(16), nullable=False, default="pdf")
+    report_url: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
 
