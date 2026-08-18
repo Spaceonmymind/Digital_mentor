@@ -147,6 +147,7 @@ const elements = {
   metricsContent: document.getElementById("metricsContent"),
   metricsAgents: document.getElementById("metricsAgents"),
   documentModal: document.getElementById("documentModal"),
+  documentModalTitle: document.getElementById("documentModalTitle"),
   documentModalClose: document.getElementById("documentModalClose"),
   documentEvidenceNotice: document.getElementById("documentEvidenceNotice"),
   documentEvidenceQuote: document.getElementById("documentEvidenceQuote"),

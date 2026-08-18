@@ -21,6 +21,7 @@ for (const id of [
   "historyModal",
   "metricsModal",
   "documentModal",
+  "documentModalTitle",
   "documentPageImage",
   "documentPageHighlight",
   "recommendationProgressBar",
@@ -60,6 +61,7 @@ assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual i
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
 assert(app.includes("data-evidence-index"), "Evidence navigation control is missing");
+assert(app.includes('documentModalTitle: document.getElementById("documentModalTitle")'), "Evidence modal title must be registered before opening fragments");
 assert(app.includes("Фрагменты исходного документа"), "Source evidence must be visible in the objections section");
 assert(app.includes("data-evidence-index"), "PDF evidence buttons must open from the objections section");
 assert(app.includes("bindEvidenceButtons"), "Evidence controls must receive direct click handlers");
