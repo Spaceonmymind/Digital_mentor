@@ -510,8 +510,8 @@ Parallelism:
 
 Token limits in current code:
 
-- Demo agents: `max_completion_tokens=700`.
-- Demo final A-01: `max_completion_tokens=1200`.
+- Demo agents: `max_completion_tokens=1200` for the two-criterion structured output.
+- Demo final A-01: `max_completion_tokens=1800` for the six-criterion report.
 
 Fallback:
 

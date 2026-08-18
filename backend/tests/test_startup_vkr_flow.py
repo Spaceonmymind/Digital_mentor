@@ -372,8 +372,8 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert [call["model"] for call in llm.calls].count(CRITIC) == 2
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1
     assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
-    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"} == {700}
-    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1200}
+    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"} == {1200}
+    assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1800}
     assert metrics["mode"] == "demo"
     assert metrics["agent_time_a15"] >= 0
     assert payload.methodology.methodology_version == "2.0"
