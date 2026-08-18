@@ -987,7 +987,7 @@ Useful performance queries should compare:
 - Detailed report is not a separate deep AI report; it is a PDF assembly from saved result and extracted fragments.
 - Fragment search for chat/report is simple keyword scoring, not semantic retrieval.
 - Auth/roles/admin access are not implemented; internal endpoints are exposed at API level.
-- Frontend history is localStorage only.
+- Analysis history is server-backed through `GET /api/v1/analyses/history`; without auth it is intentionally shared across the current deployment rather than isolated per user.
 - Long/complex documents can still stress structured output limits if prompts or completion caps are changed carelessly.
 - Some legacy DTO fields (`overall_score`, 0-100 criteria) remain for backward frontend compatibility.
 
@@ -1094,3 +1094,14 @@ LATER:
 4. Изучи файлы, относящиеся к задаче.
 5. Не полагайся только на `MASTER_CONTEXT.md`: если код ему противоречит, код является источником истины.
 6. Не начинай с переписывания архитектуры; сначала найди существующий flow и точку минимального изменения.
+
+## 35. Demo UX, history, evidence navigation, and metrics
+
+- Mascot text is a compact status/preview surface; full mentor answers remain in chat while TTS still receives the complete spoken text.
+- Frontend progress separates saved backend stages from smooth visual interpolation. Stage ceilings prevent 100% before real completion; the UI also shows elapsed time and respects reduced-motion preferences.
+- STARTUP_VKR demo criteria render sentence-safe previews and expandable details with strengths, issues, recommendations, and available evidence.
+- `GET /api/v1/analyses/history` lists saved analyses from existing `Analysis`, `Document`, `AnalysisResult`, and `DetailedReport` records. No new history table is used.
+- `GET /api/v1/analyses/{analysis_id}/metrics` aggregates saved `llm_calls` and analysis timestamps without returning prompts, responses, or secrets.
+- `GET /api/v1/analyses/{analysis_id}/evidence` maps saved agent evidence to extracted PDF blocks or DOCX paragraphs. PDF evidence can navigate to a real source page; DOCX uses an extracted-fragment panel because no page mapping exists.
+- `GET /api/v1/documents/{document_id}/source` serves the retained original document inline for the evidence viewer.
+- No database migration, new LLM call, methodology/scoring change, model change, or TTS configuration change was required.

@@ -114,4 +114,9 @@ def _looks_like_heading(text: str) -> bool:
 def _trim(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
-    return text[:max_chars].rstrip() + "..."
+    candidate = text[: max_chars + 1].strip()
+    sentence_end = max(candidate.rfind("."), candidate.rfind("!"), candidate.rfind("?"))
+    if sentence_end >= max_chars // 2:
+        return candidate[: sentence_end + 1]
+    word_end = candidate.rfind(" ", 0, max_chars)
+    return candidate[: word_end if word_end > 0 else max_chars].rstrip() + "…"

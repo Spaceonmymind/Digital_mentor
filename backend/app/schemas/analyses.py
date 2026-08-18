@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Literal
+from decimal import Decimal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,3 +42,67 @@ class AnalysisEventResponse(BaseModel):
     progress: int
     message: str
     created_at: datetime
+
+
+class AnalysisHistoryItem(BaseModel):
+    analysis_id: str
+    document_id: str
+    document_name: str
+    mime_type: str
+    status: AnalysisStatus
+    methodology_id: str
+    methodology_version: str
+    mode: AnalysisMode
+    overall_score: int | None = None
+    total_score_max: int | None = None
+    report_url: str | None = None
+    created_at: datetime
+    completed_at: datetime | None = None
+
+
+class AnalysisHistoryResponse(BaseModel):
+    items: list[AnalysisHistoryItem]
+    total: int
+    limit: int
+    offset: int
+
+
+class AnalysisMetricAgent(BaseModel):
+    agent_code: str | None
+    model: str
+    provider: str | None = None
+    latency_ms: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cached_tokens: int
+    cost_rub: Decimal | None = None
+    status: str
+
+
+class AnalysisMetricsResponse(BaseModel):
+    processing_time_ms: int
+    methodology: dict[str, str]
+    agents_count: int
+    llm_calls_count: int
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+    cached_tokens: int
+    cost_rub: Decimal
+    models: list[str]
+    providers: list[str]
+    agents: list[AnalysisMetricAgent]
+
+
+class AnalysisEvidenceItem(BaseModel):
+    criterion_code: str | None = None
+    document_id: str
+    page: int | None = None
+    section: str | None = None
+    quote: str | None = None
+    block_index: int | None = None
+    bbox: list[float] | None = None
+    source_type: Literal["pdf", "docx"]
+    match_status: Literal["exact", "page_only", "fragment"]
+    extra: dict[str, Any] = {}

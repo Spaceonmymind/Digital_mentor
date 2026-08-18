@@ -27,6 +27,18 @@ def normalize_demo_score(value: Any, *, max_score: int = 10) -> int:
     return score
 
 
+def truncate_to_sentence(text: str, max_chars: int) -> str:
+    normalized = " ".join(text.split()).strip()
+    if len(normalized) <= max_chars:
+        return normalized
+    candidate = normalized[: max_chars + 1]
+    sentence_end = max(candidate.rfind("."), candidate.rfind("!"), candidate.rfind("?"))
+    if sentence_end >= max_chars // 2:
+        return candidate[: sentence_end + 1]
+    word_end = candidate.rfind(" ", 0, max_chars)
+    return candidate[: word_end if word_end > 0 else max_chars].rstrip() + "…"
+
+
 class EvidenceItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -383,8 +395,8 @@ class DemoEvidence(BaseModel):
 
     @model_validator(mode="after")
     def compact(self):
-        self.section = self.section[:120] if self.section else None
-        self.quote = self.quote[:300] if self.quote else None
+        self.section = truncate_to_sentence(self.section, 120) if self.section else None
+        self.quote = truncate_to_sentence(self.quote, 300) if self.quote else None
         return self
 
 
@@ -415,9 +427,9 @@ class DemoAgentCriterion(BaseModel):
     def compact(self):
         if not self.summary.strip():
             raise ValueError("summary is required")
-        self.summary = self.summary[:360]
-        self.strengths = [item[:240] for item in self.strengths[:2]]
-        self.issues = [item[:240] for item in self.issues[:2]]
+        self.summary = truncate_to_sentence(self.summary, 360)
+        self.strengths = [truncate_to_sentence(item, 240) for item in self.strengths[:2]]
+        self.issues = [truncate_to_sentence(item, 240) for item in self.issues[:2]]
         self.evidence = self.evidence[:3]
         return self
 
@@ -433,13 +445,13 @@ class DemoAgentOutput(BaseModel):
     def limit_demo_lists(self):
         if not self.summary.strip():
             raise ValueError("summary is required")
-        self.summary = self.summary[:500]
+        self.summary = truncate_to_sentence(self.summary, 500)
         if not self.criteria:
             raise ValueError("at least one criterion assessment is required")
         codes = [item.criterion_code for item in self.criteria]
         if len(codes) != len(set(codes)):
             raise ValueError("criterion assessments must be unique")
-        self.recommendations = [item[:300] for item in self.recommendations[:3]]
+        self.recommendations = [truncate_to_sentence(item, 300) for item in self.recommendations[:3]]
         return self
 
 
@@ -469,9 +481,9 @@ class DemoCriterionScore(BaseModel):
     def validate_demo_criterion(self):
         if not self.comment.strip():
             raise ValueError("demo criterion comment is required")
-        self.comment = self.comment[:500]
-        self.strengths = [item[:240] for item in self.strengths[:2]]
-        self.issues = [item[:240] for item in self.issues[:2]]
+        self.comment = truncate_to_sentence(self.comment, 500)
+        self.strengths = [truncate_to_sentence(item, 240) for item in self.strengths[:2]]
+        self.issues = [truncate_to_sentence(item, 240) for item in self.issues[:2]]
         return self
 
 
@@ -505,12 +517,12 @@ class DemoFinalReport(BaseModel):
             raise ValueError("demo spoken_summary is required")
         if not self.disclaimer.strip():
             raise ValueError("demo disclaimer is required")
-        self.strengths = [item[:360] for item in self.strengths[:5]]
-        self.remarks = [item[:360] for item in self.remarks[:5]]
-        self.recommendations = [item[:500] for item in self.recommendations[:5]]
-        self.conclusion = self.conclusion[:500]
-        self.spoken_summary = self.spoken_summary[:500]
-        self.disclaimer = self.disclaimer[:400]
+        self.strengths = [truncate_to_sentence(item, 360) for item in self.strengths[:5]]
+        self.remarks = [truncate_to_sentence(item, 360) for item in self.remarks[:5]]
+        self.recommendations = [truncate_to_sentence(item, 500) for item in self.recommendations[:5]]
+        self.conclusion = truncate_to_sentence(self.conclusion, 500)
+        self.spoken_summary = truncate_to_sentence(self.spoken_summary, 500)
+        self.disclaimer = truncate_to_sentence(self.disclaimer, 400)
         total = sum(item.score for item in self.criteria)
         if self.overall_score != total:
             self.overall_score = total

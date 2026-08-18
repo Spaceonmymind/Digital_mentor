@@ -8,6 +8,7 @@ from docx import Document as DocxDocument
 from sqlalchemy import select
 
 from app.api.v1 import documents as documents_api
+from app.api.v1.analyses import _locate_evidence
 from app.api.v1 import internal_llm as internal_llm_api
 from app.assessment.models import Assessment
 from app.db.models import Analysis
@@ -39,6 +40,20 @@ def make_docx_bytes(text: str = "Методы исследования") -> byte
     buffer = io.BytesIO()
     document.save(buffer)
     return buffer.getvalue()
+
+
+def test_pdf_evidence_location_uses_exact_quote_and_bbox():
+    payload = {
+        "pages": [
+            {
+                "page_number": 3,
+                "blocks": [
+                    {"block_index": 7, "text": "Проверяемая цитата из финансовой модели", "bbox": [1, 2, 3, 4]}
+                ],
+            }
+        ]
+    }
+    assert _locate_evidence(payload, "цитата из финансовой модели", None) == (3, 7, [1, 2, 3, 4], "exact")
 
 
 async def upload_pdf(client):
@@ -667,6 +682,71 @@ async def test_create_analysis_missing_document(client):
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
+
+@pytest.mark.asyncio
+async def test_analysis_history_metrics_and_source_are_read_only(client):
+    document = await upload_pdf(client)
+    create_response = await client.post(
+        "/api/v1/analyses",
+        json={
+            "document_id": document["id"],
+            "analysis_type": "mentor",
+            "methodology_id": "STARTUP_VKR",
+            "methodology_version": "2.0",
+            "mode": "demo",
+        },
+    )
+    analysis_id = create_response.json()["analysis_id"]
+    await wait_for_completed_analysis(client, analysis_id)
+    async with async_session_factory() as session:
+        session.add(
+            LLMCall(
+                model="openai/gpt-test",
+                requested_model="openai/gpt-test",
+                actual_model="gpt-test",
+                aggregator="polza",
+                provider="openai",
+                analysis_id=analysis_id,
+                agent_code="A-01",
+                prompt_tokens=100,
+                completion_tokens=40,
+                total_tokens=140,
+                cached_tokens=10,
+                cost_rub=Decimal("1.250000"),
+                latency_ms=900,
+                status="success",
+            )
+        )
+        await session.commit()
+
+    history = await client.get("/api/v1/analyses/history?limit=10&offset=0")
+    assert history.status_code == 200, history.text
+    history_payload = history.json()
+    assert history_payload["total"] == 1
+    assert history_payload["items"][0]["analysis_id"] == analysis_id
+    assert history_payload["items"][0]["document_name"] == "work.pdf"
+    assert history_payload["items"][0]["overall_score"] == 87
+
+    metrics = await client.get(f"/api/v1/analyses/{analysis_id}/metrics")
+    assert metrics.status_code == 200, metrics.text
+    metrics_payload = metrics.json()
+    assert metrics_payload["llm_calls_count"] == 1
+    assert metrics_payload["total_tokens"] == 140
+    assert metrics_payload["cost_rub"] == "1.250000"
+    assert metrics_payload["agents"][0]["agent_code"] == "A-01"
+    serialized = metrics.text.lower()
+    assert "prompt" not in serialized
+    assert "api_key" not in serialized
+
+    source = await client.get(f"/api/v1/documents/{document['id']}/source")
+    assert source.status_code == 200
+    assert source.content.startswith(b"%PDF")
+    assert source.headers["content-disposition"].startswith("inline")
+
+    evidence = await client.get(f"/api/v1/analyses/{analysis_id}/evidence")
+    assert evidence.status_code == 200
+    assert evidence.json() == []
 
 
 @pytest.mark.asyncio

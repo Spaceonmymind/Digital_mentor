@@ -2,10 +2,11 @@ import logging
 import mimetypes
 import zipfile
 import json
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -142,6 +143,23 @@ async def get_document_content(document_id: str, session: AsyncSession = Depends
     if not path.exists():
         raise AppError("DOCUMENT_TEXT_NOT_FOUND", "Извлеченный текст документа не найден", status_code=404)
     return DocumentContentResponse(document_id=document_id, content=json.loads(path.read_text(encoding="utf-8")))
+
+
+@router.get("/{document_id}/source")
+async def get_document_source(document_id: str, session: AsyncSession = Depends(get_session)) -> FileResponse:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    path = Path(document.storage_path)
+    if not path.exists():
+        raise AppError("DOCUMENT_FILE_NOT_FOUND", "Исходный файл документа не найден", status_code=404)
+    safe_name = PurePath(document.original_name).name
+    return FileResponse(
+        path,
+        media_type=document.mime_type,
+        filename=safe_name,
+        content_disposition_type="inline",
+    )
 
 
 @router.delete("/{document_id}", response_model=DocumentResponse)

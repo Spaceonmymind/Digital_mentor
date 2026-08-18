@@ -17,6 +17,9 @@ for (const id of [
   "finalStage",
   "presenterPanel",
   "historyList",
+  "historyModal",
+  "metricsModal",
+  "documentModal",
   "recommendationModal",
 ]) {
   assert(html.includes(`id="${id}"`), `Missing ${id}`);
@@ -30,12 +33,20 @@ assert(html.includes('class="about-agents"'), "About page must include the agent
 assert(!html.includes("Демонстрационный автономный режим"), "Mock mode banner must stay hidden from the main UI");
 assert(app.includes("Ctrl") || app.includes("ctrlKey"), "Missing presenter keyboard shortcut");
 assert(app.includes("requestImprovementDirection"), "Improvement direction must use a service");
-assert(app.includes("addHistoryItem"), "Missing local history save");
+assert(app.includes("getAnalysisHistory"), "History must load from the backend");
+assert(app.includes("data-open-history"), "History items must reopen saved analyses");
 assert(app.includes("Предварительная оценка цифрового ментора"), "Missing preliminary mentor score label");
 assert(app.includes('`${score}/10`'), "Demo criteria must render X/10");
 assert(app.includes('`${normalized.overall_score} / 60`'), "Demo overall score must render XX/60");
 assert(app.includes("criterion__details"), "Demo criteria must provide compact details");
 assert(app.includes("Подробнее"), "Demo criteria must include the details control");
+assert(app.includes("truncateToSentence"), "Report previews must truncate at sentence boundaries");
+assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual interpolation");
+assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
+assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
+assert(app.includes("data-show-evidence"), "Evidence navigation control is missing");
+assert(app.includes("source_type === \"pdf\""), "PDF-only viewer behavior is missing");
+assert(!app.includes("setMentor(voiceWillPlay ? \"speaking\" : \"success\", response.answer"), "Full chat answer must not be copied into mascot bubble");
 assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");
 assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
 assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");

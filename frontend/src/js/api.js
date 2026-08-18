@@ -67,6 +67,25 @@ export async function getAnalysisResult(analysisId) {
   return parseResponse(response);
 }
 
+export async function getAnalysisHistory({ limit = 20, offset = 0 } = {}) {
+  const response = await fetch(`${API_BASE_URL}/analyses/history?limit=${limit}&offset=${offset}`);
+  return parseResponse(response);
+}
+
+export async function getAnalysisMetrics(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/metrics`);
+  return parseResponse(response);
+}
+
+export async function getAnalysisEvidence(analysisId) {
+  const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/evidence`);
+  return parseResponse(response);
+}
+
+export function getDocumentSourceUrl(documentId) {
+  return `${API_BASE_URL}/documents/${documentId}/source`;
+}
+
 
 export async function cancelAnalysis(analysisId) {
   const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/cancel`, {

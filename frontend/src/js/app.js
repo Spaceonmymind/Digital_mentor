@@ -9,13 +9,25 @@ import {
 import { getMentorAnswer, quickQuestions } from "../mocks/mentorChat.js";
 import { FRONTEND_MOCK_MODE } from "./config.js";
 import { renderIcons } from "./icons.js";
-import { cancelAnalysis, createReport, getDetailedReportStatus, getPublicConfig, startDetailedReport, synthesizeAnalysisSpeech } from "./api.js";
+import {
+  cancelAnalysis,
+  createReport,
+  getAnalysisEvidence,
+  getAnalysisHistory,
+  getAnalysisMetrics,
+  getAnalysisResult,
+  getDetailedReportStatus,
+  getDocument,
+  getDocumentSourceUrl,
+  getPublicConfig,
+  startDetailedReport,
+  synthesizeAnalysisSpeech,
+} from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
 import { BrowserSpeechService, BrowserSttService, DisabledSpeechService, RemoteTtsSpeechService } from "./modules/speech.js";
 import { MascotController } from "./modules/mascot.js";
-import { addHistoryItem, getHistory, removeHistoryItem } from "./modules/history.js";
 import { checkReadiness } from "./modules/readiness.js";
 import { requestImprovementDirection } from "./modules/recommendations.js";
 
@@ -39,6 +51,13 @@ const state = {
   lastSpokenStep: "",
   detailedReport: null,
   detailedReportPoll: null,
+  evidence: [],
+  visualProgress: 0,
+  visualProgressTarget: 0,
+  visualProgressCeiling: 12,
+  progressAnimation: null,
+  analysisStartedAt: null,
+  elapsedTimer: null,
 };
 
 const elements = {
@@ -73,6 +92,7 @@ const elements = {
   cancelAnalysisButton: document.getElementById("cancelAnalysisButton"),
   processingFileName: document.getElementById("processingFileName"),
   processingPercent: document.getElementById("processingPercent"),
+  processingElapsed: document.getElementById("processingElapsed"),
   processingPhase: document.getElementById("processingPhase"),
   processingLiveStep: document.getElementById("processingLiveStep"),
   overallProgressBar: document.getElementById("overallProgressBar"),
@@ -115,6 +135,20 @@ const elements = {
   finalResetButton: document.getElementById("finalResetButton"),
   backToResultsButton: document.getElementById("backToResultsButton"),
   historyList: document.getElementById("historyList"),
+  historyButton: document.getElementById("historyButton"),
+  historyModal: document.getElementById("historyModal"),
+  historyModalClose: document.getElementById("historyModalClose"),
+  historyModalList: document.getElementById("historyModalList"),
+  metricsButton: document.getElementById("metricsButton"),
+  metricsModal: document.getElementById("metricsModal"),
+  metricsModalClose: document.getElementById("metricsModalClose"),
+  metricsContent: document.getElementById("metricsContent"),
+  metricsAgents: document.getElementById("metricsAgents"),
+  documentModal: document.getElementById("documentModal"),
+  documentModalClose: document.getElementById("documentModalClose"),
+  documentEvidenceNotice: document.getElementById("documentEvidenceNotice"),
+  documentEvidenceQuote: document.getElementById("documentEvidenceQuote"),
+  documentViewerFrame: document.getElementById("documentViewerFrame"),
   errorTitle: document.getElementById("errorTitle"),
   errorDescription: document.getElementById("errorDescription"),
   errorRequestId: document.getElementById("errorRequestId"),
@@ -177,6 +211,23 @@ const mascot = new MascotController({
   wave: elements.voiceWave,
 });
 
+export function truncateToSentence(text = "", maxChars = 160) {
+  const normalized = String(text).replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxChars) return normalized;
+  const candidate = normalized.slice(0, maxChars + 1);
+  const sentenceEnd = Math.max(candidate.lastIndexOf("."), candidate.lastIndexOf("!"), candidate.lastIndexOf("?"));
+  if (sentenceEnd >= Math.floor(maxChars / 2)) return candidate.slice(0, sentenceEnd + 1);
+  const wordEnd = candidate.lastIndexOf(" ", maxChars);
+  return `${candidate.slice(0, wordEnd > 0 ? wordEnd : maxChars).trim()}…`;
+}
+
+function mentorPreview(status, message) {
+  if (status === "thinking") return "Анализирую работу…";
+  if (status === "speaking") return "Формирую ответ…";
+  if (status === "success" && String(message || "").length > 180) return `${truncateToSentence(message, 150)} Подробнее — в диалоге.`;
+  return truncateToSentence(message, 180);
+}
+
 function setMentor(status, message, speechOptions = {}) {
   const statusLabels = {
     idle: "Ожидает документ",
@@ -187,7 +238,7 @@ function setMentor(status, message, speechOptions = {}) {
     success: "Анализ завершен",
     error: "Требуется действие",
   };
-  mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message });
+  mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message: mentorPreview(status, message) });
   return speakMentor(message, false, speechOptions);
 }
 
@@ -496,12 +547,20 @@ function resetScenario() {
   state.ttsStatus = "idle";
   state.detailedReport = null;
   state.detailedReportPoll = null;
+  state.evidence = [];
+  state.visualProgress = 0;
+  state.visualProgressTarget = 0;
+  state.visualProgressCeiling = 12;
+  window.clearInterval(state.elapsedTimer);
+  if (state.progressAnimation) cancelAnimationFrame(state.progressAnimation);
+  state.progressAnimation = null;
   setDetailedReportButtons("not_started");
   closeRecommendationModal();
   elements.fileInput.value = "";
   elements.filePreview.hidden = true;
   elements.startAnalysisButton.disabled = true;
   elements.processingPercent.textContent = "0%";
+  elements.processingElapsed.textContent = "Прошло: 00:00";
   elements.processingPhase.textContent = "Подготовка документа";
   elements.processingLiveStep.textContent = "Ожидаю запуск";
   elements.overallProgressBar.style.width = "0%";
@@ -514,11 +573,13 @@ function resetScenario() {
 }
 
 const processingAgents = [
-  { title: "Проблема", description: "проверяю актуальность и потребность" },
-  { title: "Бизнес и финансы", description: "смотрю модель, коммерциализацию и расчеты" },
-  { title: "Продукт", description: "проверяю новизну, MVP и реализуемость" },
-  { title: "Рынок и риски", description: "проверяю конкурентов, развитие и ограничения" },
-  { title: "Итог", description: "собираю понятное заключение" },
+  { title: "Документ загружен", description: "проверяю формат и доступность текста" },
+  { title: "Извлечение текста", description: "разбираю структуру документа" },
+  { title: "Подготовка материалов", description: "собираю смысловые блоки" },
+  { title: "Экспертный анализ", description: "независимые проверки идут параллельно" },
+  { title: "Сопоставление выводов", description: "сверяю результаты проверок" },
+  { title: "Итоговая оценка", description: "формирую единое заключение" },
+  { title: "Подготовка отчета", description: "сохраняю результат для просмотра" },
 ];
 
 function renderAnalysisSteps(activeIndex = -1, progress = 0) {
@@ -527,8 +588,6 @@ function renderAnalysisSteps(activeIndex = -1, progress = 0) {
       let status = "waiting";
       if (progress >= 100 || index < activeIndex) status = "complete";
       if (index === activeIndex) status = "running";
-      if (activeIndex === 1 && index >= 0 && index <= 3) status = "running";
-      if (activeIndex === 4 && index <= 3) status = "complete";
       const label = status === "complete" ? "готово" : status === "running" ? "в работе" : "ожидает";
       const indicator = status === "complete" ? '<span data-icon="check"></span>' : "";
       return `
@@ -549,9 +608,11 @@ function renderAnalysisSteps(activeIndex = -1, progress = 0) {
 }
 
 function processingAgentIndex(progress = 0, currentStep = "") {
-  if (currentStep === "demo_final" || progress >= 88) return 4;
-  if (currentStep === "demo_agents" || progress >= 25) return 1;
-  return 0;
+  if (currentStep === "completed" || progress >= 100) return 7;
+  if (currentStep === "demo_final" || progress >= 88) return 5;
+  if (currentStep === "demo_agents" || progress >= 25) return 3;
+  if (["extracting", "preparing"].includes(currentStep)) return 1;
+  return progress > 0 ? 2 : 0;
 }
 
 function processingStepLabel(progress = 0, currentStep = "") {
@@ -562,6 +623,61 @@ function processingStepLabel(progress = 0, currentStep = "") {
   return "Запуск анализа";
 }
 
+function visualProgressRange(progress = 0, currentStep = "") {
+  if (currentStep === "completed" || progress >= 100) return [100, 100];
+  if (currentStep === "demo_final" || progress >= 88) return [86, 96];
+  if (currentStep === "demo_agents" || progress >= 25) return [36, 72];
+  if (["extracting", "preparing"].includes(currentStep)) return [14, 30];
+  return [Math.max(4, Math.min(progress, 14)), 18];
+}
+
+function paintVisualProgress() {
+  const value = Math.round(state.visualProgress);
+  elements.processingPercent.textContent = `${value}%`;
+  elements.overallProgressBar.style.width = `${value}%`;
+}
+
+function animateVisualProgress() {
+  if (state.progressAnimation) return;
+  let previous = performance.now();
+  const frame = (now) => {
+    const seconds = Math.min((now - previous) / 1000, 0.1);
+    previous = now;
+    const desired = Math.min(state.visualProgressCeiling, Math.max(state.visualProgressTarget, state.visualProgress + 0.06));
+    const speed = desired === 100 ? 38 : Math.max(1.2, (desired - state.visualProgress) * 1.8);
+    state.visualProgress = Math.min(desired, state.visualProgress + speed * seconds);
+    paintVisualProgress();
+    if (state.visualProgress >= 99.95 && state.visualProgressTarget === 100) {
+      state.visualProgress = 100;
+      paintVisualProgress();
+      state.progressAnimation = null;
+      return;
+    }
+    state.progressAnimation = requestAnimationFrame(frame);
+  };
+  state.progressAnimation = requestAnimationFrame(frame);
+}
+
+function updateVisualProgress(progress, currentStep) {
+  const [target, ceiling] = visualProgressRange(progress, currentStep);
+  state.visualProgressTarget = Math.max(state.visualProgressTarget, target);
+  state.visualProgressCeiling = Math.max(state.visualProgressCeiling, ceiling);
+  animateVisualProgress();
+}
+
+function startElapsedTimer() {
+  state.analysisStartedAt = Date.now();
+  window.clearInterval(state.elapsedTimer);
+  const update = () => {
+    const elapsed = Math.floor((Date.now() - state.analysisStartedAt) / 1000);
+    const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+    const seconds = String(elapsed % 60).padStart(2, "0");
+    elements.processingElapsed.textContent = `Прошло: ${minutes}:${seconds}`;
+  };
+  update();
+  state.elapsedTimer = window.setInterval(update, 1000);
+}
+
 function renderResults(result) {
   const normalized = normalizeResult(result);
   state.result = normalized;
@@ -569,25 +685,37 @@ function renderResults(result) {
 
   elements.criteriaList.innerHTML = normalized.criteria
     .map(
-      ({ code, title, score, explanation, strengths = [], issues = [] }) => `
+      ({ code, title, score, explanation, strengths = [], issues = [], recommendations = [] }) => {
+        const evidence = state.evidence.filter((item) => item.criterion_code === code);
+        const preview = truncateToSentence(explanation || getScoreLevel(score), 220);
+        const scoreLevel = score <= 3 ? "Слабая проработка" : score <= 6 ? "Требует доработки" : score <= 8 ? "Хорошо" : "Очень хорошо";
+        return `
         <div class="criterion">
           <div class="criterion__head">
             <span>${normalized.isDemoReport && code ? `${code}. ` : ""}${title}</span>
             <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}%`}</strong>
           </div>
-          <small>${explanation || getScoreLevel(score)}</small>
+          <small>${preview}</small>
+          ${normalized.isDemoReport ? `<div class="criterion__signals">
+            ${strengths[0] ? `<span class="is-strength">+ ${strengths[0]}</span>` : ""}
+            ${issues[0] ? `<span class="is-issue">! ${issues[0]}</span>` : ""}
+          </div>` : ""}
           <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : normalized.isDemoReport ? Math.round((score / 10) * 100) : score}%"></span></div>
+          ${normalized.isDemoReport ? `<span class="criterion__score-label">${scoreLevel}</span>` : ""}
           ${normalized.isDemoReport ? `
             <details class="criterion__details">
               <summary>Подробнее</summary>
               <div class="criterion__details-body">
+                <strong>Объяснение</strong><p>${explanation || "Нет пояснения."}</p>
                 ${strengths.length ? `<strong>Сильные стороны</strong><ul>${strengths.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
                 ${issues.length ? `<strong>Что доработать</strong><ul>${issues.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+                ${recommendations.length ? `<strong>Рекомендации</strong><ul>${recommendations.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
+                ${evidence.length ? `<strong>Доказательства</strong>${evidence.map((item, index) => `<div class="criterion__evidence"><p>${item.quote || item.section || "Связанный фрагмент"}</p><button class="button button--ghost" type="button" data-show-evidence="${code}:${index}">${item.source_type === "pdf" && item.page ? "Показать в документе" : "Показать фрагмент"}</button></div>`).join("")}` : ""}
               </div>
             </details>
           ` : ""}
         </div>
-      `,
+      `},
     )
     .join("");
 
@@ -602,15 +730,7 @@ function renderResults(result) {
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
   renderSummary(normalized);
-  if (normalized.analysis_id) {
-    addHistoryItem({
-      analysis_id: normalized.analysis_id,
-      document_name: state.document?.name || state.file?.name || "Документ",
-      overall_score: normalized.overall_score,
-      status: "completed",
-    });
-    renderHistory();
-  }
+  if (normalized.analysis_id) renderHistory();
 }
 
 function normalizeResult(result) {
@@ -659,6 +779,7 @@ function normalizeDemoReportResult(result, report) {
       explanation: item.comment,
       strengths: item.strengths || [],
       issues: item.issues || [],
+      recommendations: (report.recommendations || []).slice(index, index + 1),
     })),
     strengths: report.strengths || [],
     improvements: report.remarks || [],
@@ -932,7 +1053,7 @@ async function askMentor(question) {
     await speakMentor(response.answer, false, { remoteText: true });
     typing.remove();
     addMessage("mentor", response.answer);
-    setMentor(voiceWillPlay ? "speaking" : "success", response.answer, { silent: true });
+    setMentor(voiceWillPlay ? "speaking" : "success", voiceWillPlay ? "Озвучиваю рекомендацию…" : "Ответ готов", { silent: true });
   } catch (error) {
     typing.remove();
     const answer = getMentorAnswer(question);
@@ -950,6 +1071,11 @@ async function startAnalysis() {
   elements.processingPhase.textContent = "Подготовка документа";
   elements.processingLiveStep.textContent = "Запуск анализа";
   elements.overallProgressBar.style.width = "0%";
+  state.visualProgress = 0;
+  state.visualProgressTarget = 4;
+  state.visualProgressCeiling = 14;
+  startElapsedTimer();
+  animateVisualProgress();
   showStage("processing");
   renderAnalysisSteps(0, 0);
   setMentor("thinking", analysisSteps[0].message);
@@ -963,10 +1089,9 @@ async function startAnalysis() {
         state.analysisId = status.id || state.analysisId;
       }
       const progress = Math.max(0, Math.min(100, status.progress || 0));
-      elements.processingPercent.textContent = `${progress}%`;
       elements.processingPhase.textContent = status.message || "Агенты анализируют документ";
       elements.processingLiveStep.textContent = processingStepLabel(progress, status.current_step || "");
-      elements.overallProgressBar.style.width = `${progress}%`;
+      updateVisualProgress(progress, status.current_step || "");
       const shouldSpeak = [20, 48, 72, 95].some((mark) => Math.abs(progress - mark) <= 3);
       const stepKey = status.current_step || status.message;
       if (shouldSpeak && stepKey !== state.lastSpokenStep) {
@@ -978,11 +1103,21 @@ async function startAnalysis() {
     });
 
     state.analysisId = result.analysis_id || state.analysisId;
-    elements.processingPercent.textContent = "100%";
+    updateVisualProgress(100, "completed");
+    state.visualProgress = 100;
+    paintVisualProgress();
+    window.clearInterval(state.elapsedTimer);
     elements.processingPhase.textContent = "Быстрый анализ готов";
     elements.processingLiveStep.textContent = "Завершено";
     elements.overallProgressBar.style.width = "100%";
     renderAnalysisSteps(processingAgents.length, 100);
+    if (!FRONTEND_MOCK_MODE) {
+      try {
+        state.evidence = await getAnalysisEvidence(state.analysisId);
+      } catch {
+        state.evidence = [];
+      }
+    }
     renderResults(result);
     renderDocumentReview();
     renderRecommendationPlan(normalizeResult(result).recommendations);
@@ -998,6 +1133,7 @@ async function startAnalysis() {
       normalized.spokenSummary ? { analysisId: state.analysisId } : {},
     );
   } catch (error) {
+    window.clearInterval(state.elapsedTimer);
     showError("Не удалось обработать документ", error.message || "Проверьте, что файл не поврежден и содержит текстовый слой.", error.body?.error?.request_id);
   }
 }
@@ -1047,26 +1183,105 @@ function showError(title, description, requestId) {
   setMentor("error", description);
 }
 
-function renderHistory() {
-  const items = getHistory();
-  elements.historyList.innerHTML = items.length
+async function renderHistory() {
+  let items = [];
+  try {
+    items = FRONTEND_MOCK_MODE ? [] : (await getAnalysisHistory({ limit: 20 })).items;
+  } catch {
+    elements.historyList.innerHTML = "<p>История временно недоступна.</p>";
+    elements.historyModalList.innerHTML = elements.historyList.innerHTML;
+    return;
+  }
+  const markup = items.length
     ? items
         .map(
           (item) => `
             <article class="history-item">
               <div>
                 <strong>${item.document_name}</strong>
-                <span>${new Date(item.created_at).toLocaleString("ru-RU")} · ${item.overall_score || "—"} баллов · ${item.status}</span>
+                <span>${new Date(item.created_at).toLocaleString("ru-RU")} · ${item.methodology_id} ${item.methodology_version} · ${item.overall_score ?? "—"}/${item.total_score_max || 60} · ${item.status}</span>
               </div>
-              <button class="icon-button" type="button" aria-label="Удалить запись истории" data-remove-history="${item.analysis_id}">
-                <span data-icon="trash-2"></span>
-              </button>
+              <button class="button button--ghost" type="button" data-open-history="${item.analysis_id}" data-document-id="${item.document_id}">Открыть</button>
             </article>
           `,
         )
         .join("")
-    : "<p>Пока нет сохраненных проверок.</p>";
+    : "<p>Вы еще не запускали анализ.</p>";
+  elements.historyList.innerHTML = markup;
+  elements.historyModalList.innerHTML = markup;
   renderIcons();
+}
+
+async function openHistoryAnalysis(analysisId, documentId) {
+  try {
+    const [result, documentMetadata, evidence] = await Promise.all([
+      getAnalysisResult(analysisId),
+      getDocument(documentId),
+      getAnalysisEvidence(analysisId).catch(() => []),
+    ]);
+    state.analysisId = analysisId;
+    state.document = documentMetadata;
+    state.evidence = evidence;
+    state.detailedReport = null;
+    setDetailedReportButtons("not_started");
+    renderResults(result);
+    renderDocumentReview();
+    renderRecommendationPlan(normalizeResult(result).recommendations);
+    renderDirections();
+    renderChat();
+    startDetailedReportLoading();
+    showStage("results");
+    setMentor("success", "Сохраненный анализ открыт. Можно изучить отчет или продолжить диалог.", { silent: true });
+  } catch (error) {
+    showNotification(error.message || "Не удалось открыть сохраненный анализ.");
+  }
+}
+
+function closeOverlay(element) {
+  element.hidden = true;
+  if (elements.metricsModal.hidden && elements.documentModal.hidden && elements.historyModal.hidden && elements.recommendationModal.hidden) {
+    document.body.classList.remove("is-modal-open");
+  }
+}
+
+async function openMetrics() {
+  if (!state.analysisId) return showNotification("Сначала откройте завершенный анализ.");
+  try {
+    const metrics = await getAnalysisMetrics(state.analysisId);
+    const rows = [
+      ["Методология", `${metrics.methodology.id} ${metrics.methodology.version}`],
+      ["Время анализа", `${(metrics.processing_time_ms / 1000).toFixed(1)} сек.`],
+      ["ИИ-агентов", metrics.agents_count],
+      ["LLM-вызовов", metrics.llm_calls_count],
+      ["Input tokens", metrics.input_tokens.toLocaleString("ru-RU")],
+      ["Output tokens", metrics.output_tokens.toLocaleString("ru-RU")],
+      ["Всего токенов", metrics.total_tokens.toLocaleString("ru-RU")],
+      ["Стоимость", `${Number(metrics.cost_rub || 0).toFixed(2)} ₽`],
+      ["Модели", metrics.models.join(", ") || "—"],
+    ];
+    elements.metricsContent.innerHTML = rows.map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join("");
+    elements.metricsAgents.innerHTML = metrics.agents.length
+      ? metrics.agents.map((agent) => `<article><strong>${agent.agent_code || "LLM"}</strong><span>${agent.model}</span><span>${agent.latency_ms} мс · ${agent.total_tokens} токенов · ${Number(agent.cost_rub || 0).toFixed(2)} ₽</span></article>`).join("")
+      : "<p>Для этого анализа LLM-вызовы не зарегистрированы.</p>";
+    elements.metricsModal.hidden = false;
+    document.body.classList.add("is-modal-open");
+  } catch (error) {
+    showNotification(error.message || "Не удалось загрузить метрики.");
+  }
+}
+
+function openEvidence(item) {
+  if (!item) return;
+  const isPdf = item.source_type === "pdf";
+  elements.documentModalTitle.textContent = isPdf ? `Исходный PDF${item.page ? ` · страница ${item.page}` : ""}` : "Фрагмент DOCX";
+  elements.documentEvidenceQuote.textContent = item.quote || item.section || "Связанный фрагмент без точной цитаты.";
+  elements.documentEvidenceNotice.textContent = item.match_status === "exact"
+    ? "Точная цитата найдена в извлеченном текстовом слое."
+    : isPdf && item.page ? "Связанный фрагмент находится на этой странице." : "Для DOCX показывается извлеченный фрагмент без выдуманной привязки к странице.";
+  elements.documentViewerFrame.hidden = !isPdf;
+  elements.documentViewerFrame.src = isPdf ? `${getDocumentSourceUrl(item.document_id)}${item.page ? `#page=${item.page}` : ""}` : "about:blank";
+  elements.documentModal.hidden = false;
+  document.body.classList.add("is-modal-open");
 }
 
 function openFullscreen() {
@@ -1258,10 +1473,40 @@ function bindEvents() {
   });
 
   elements.historyList.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-history]");
+    const button = event.target.closest("[data-open-history]");
     if (!button) return;
-    removeHistoryItem(button.dataset.removeHistory);
-    renderHistory();
+    openHistoryAnalysis(button.dataset.openHistory, button.dataset.documentId);
+  });
+  elements.historyModalList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-open-history]");
+    if (!button) return;
+    closeOverlay(elements.historyModal);
+    openHistoryAnalysis(button.dataset.openHistory, button.dataset.documentId);
+  });
+  elements.historyButton.addEventListener("click", async () => {
+    await renderHistory();
+    elements.historyModal.hidden = false;
+    document.body.classList.add("is-modal-open");
+  });
+  elements.historyModalClose.addEventListener("click", () => closeOverlay(elements.historyModal));
+  elements.historyModal.addEventListener("click", (event) => {
+    if (event.target === elements.historyModal) closeOverlay(elements.historyModal);
+  });
+
+  elements.criteriaList.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-show-evidence]");
+    if (!button) return;
+    const [code, index] = button.dataset.showEvidence.split(":");
+    openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
+  });
+  elements.metricsButton.addEventListener("click", openMetrics);
+  elements.metricsModalClose.addEventListener("click", () => closeOverlay(elements.metricsModal));
+  elements.documentModalClose.addEventListener("click", () => closeOverlay(elements.documentModal));
+  elements.metricsModal.addEventListener("click", (event) => {
+    if (event.target === elements.metricsModal) closeOverlay(elements.metricsModal);
+  });
+  elements.documentModal.addEventListener("click", (event) => {
+    if (event.target === elements.documentModal) closeOverlay(elements.documentModal);
   });
 
   elements.quickQuestions.addEventListener("click", (event) => {

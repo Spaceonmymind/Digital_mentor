@@ -458,7 +458,7 @@ class StartupVkrAgentFlow:
             if not candidates:
                 return 4, "Недостаточно данных для уверенной оценки.", [], ["Критерий раскрыт недостаточно."]
             score = round(sum(item.score_recommendation for item in candidates) / len(candidates))
-            summaries = " ".join(item.summary for item in candidates)[:500]
+            summaries = self._truncate_to_sentence(" ".join(item.summary for item in candidates), 500)
             strengths = [value for item in candidates for value in item.strengths][:2]
             issues = [value for item in candidates for value in item.issues][:2]
             return score, summaries, strengths, issues
@@ -531,6 +531,17 @@ class StartupVkrAgentFlow:
             if result.agent_code == agent_code:
                 return result.latency_ms
         return 0
+
+    @staticmethod
+    def _truncate_to_sentence(text: str, max_chars: int) -> str:
+        if len(text) <= max_chars:
+            return text
+        candidate = text[: max_chars + 1].strip()
+        sentence_end = max(candidate.rfind("."), candidate.rfind("!"), candidate.rfind("?"))
+        if sentence_end >= max_chars // 2:
+            return candidate[: sentence_end + 1]
+        word_end = candidate.rfind(" ", 0, max_chars)
+        return candidate[: word_end if word_end > 0 else max_chars].rstrip() + "…"
 
     async def _demo_agent_package(self, assessment_id: str) -> list[dict]:
         results = (

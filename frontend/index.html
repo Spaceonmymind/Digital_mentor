@@ -54,6 +54,10 @@
               <span data-icon="maximize"></span>
               Режим презентации
             </button>
+            <button class="button button--secondary" type="button" id="historyButton">
+              <span data-icon="history"></span>
+              История анализов
+            </button>
             <button class="icon-button" type="button" id="soundToggle" aria-label="Переключить звук">
               <span data-icon="volume2"></span>
             </button>
@@ -188,7 +192,7 @@
                         <div class="scanner-sweep"></div>
                         <div class="scanner-core">
                           <span id="processingPercent">0%</span>
-                          <small>готово</small>
+                          <small id="processingElapsed">Прошло: 00:00</small>
                         </div>
                         <span class="scanner-node scanner-node--a15">Проблема</span>
                         <span class="scanner-node scanner-node--a16">Экономика</span>
@@ -386,6 +390,10 @@
                   </div>
 
                   <div class="report-card__actions">
+                    <button class="button button--secondary" type="button" id="metricsButton">
+                      <span data-icon="activity"></span>
+                      Метрики анализа
+                    </button>
                     <button class="button button--large" type="button" id="reportButton">
                       <span data-icon="download"></span>
                       Скачать подробный отчет
@@ -400,7 +408,7 @@
                   <div class="section-heading">
                     <span data-icon="history"></span>
                     <div>
-                      <h2>История текущей сессии</h2>
+                      <h2>История анализов</h2>
                     </div>
                   </div>
                   <div class="history-list" id="historyList"></div>
@@ -546,6 +554,34 @@
           <button class="button" type="button" id="recommendationModalAccept">Учту</button>
           <button class="button button--secondary" type="button" id="recommendationModalOk">Понятно</button>
         </div>
+      </section>
+    </div>
+    <div class="modal-overlay" id="metricsModal" hidden>
+      <section class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="metricsModalTitle">
+        <button class="icon-button modal-close" type="button" id="metricsModalClose" aria-label="Закрыть метрики"><span data-icon="x"></span></button>
+        <p class="eyebrow">Техническая демонстрация</p>
+        <h2 id="metricsModalTitle">Метрики анализа</h2>
+        <div class="metrics-grid" id="metricsContent"></div>
+        <details class="metrics-agents"><summary>Вызовы по агентам</summary><div id="metricsAgents"></div></details>
+      </section>
+    </div>
+    <div class="modal-overlay" id="historyModal" hidden>
+      <section class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <button class="icon-button modal-close" type="button" id="historyModalClose" aria-label="Закрыть историю"><span data-icon="x"></span></button>
+        <p class="eyebrow">Сохраненные результаты</p>
+        <h2 id="historyModalTitle">История анализов</h2>
+        <p class="history-limitation">До появления авторизации история относится ко всему текущему развертыванию, а не к отдельному пользователю.</p>
+        <div class="history-list" id="historyModalList"></div>
+      </section>
+    </div>
+    <div class="modal-overlay" id="documentModal" hidden>
+      <section class="modal-card document-viewer" role="dialog" aria-modal="true" aria-labelledby="documentModalTitle">
+        <button class="icon-button modal-close" type="button" id="documentModalClose" aria-label="Закрыть документ"><span data-icon="x"></span></button>
+        <p class="eyebrow">Связанный фрагмент</p>
+        <h2 id="documentModalTitle">Исходный документ</h2>
+        <p id="documentEvidenceNotice"></p>
+        <blockquote id="documentEvidenceQuote"></blockquote>
+        <iframe id="documentViewerFrame" title="Исходный PDF" hidden></iframe>
       </section>
     </div>
     <aside class="presenter-panel" id="presenterPanel" hidden aria-label="Панель ведущего">
