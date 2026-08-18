@@ -324,7 +324,7 @@
                     <div><strong>Прогресс доработки</strong><span id="recommendationProgressText">0 рекомендаций запланировано</span></div>
                     <div class="progress"><span id="recommendationProgressBar" style="width: 0%"></span></div>
                   </div>
-                  <div class="recommendation-grid" id="recommendationPlan" tabindex="0" aria-label="Рекомендации по дальнейшим действиям"></div>
+                  <div class="recommendation-grid" id="recommendationPlan"></div>
                 </section>
 
                 <section class="card directions-card">
@@ -537,34 +537,32 @@
     <div class="notification" id="notification" role="status" aria-live="polite"></div>
     <div class="modal-overlay" id="recommendationModal" hidden>
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recommendationModalTitle">
-        <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
-          <span data-icon="x"></span>
-        </button>
-        <div class="modal-card__badge" id="recommendationModalPriority">1</div>
-        <p class="eyebrow">Рекомендация</p>
-        <h2 id="recommendationModalTitle">План доработки</h2>
-        <p id="recommendationModalDescription"></p>
-        <div class="modal-card__grid">
-          <div>
-            <span>Эффект</span>
-            <strong id="recommendationModalEffect"></strong>
+        <header class="recommendation-modal__header">
+          <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
+            <span data-icon="x"></span>
+          </button>
+          <div class="modal-card__badge" id="recommendationModalPriority">1</div>
+          <p class="eyebrow">Рекомендация</p>
+          <h2 id="recommendationModalTitle">План доработки</h2>
+        </header>
+        <div class="recommendation-modal__content">
+          <p id="recommendationModalDescription"></p>
+          <div class="modal-card__grid">
+            <div><span>Эффект</span><strong id="recommendationModalEffect"></strong></div>
+            <div><span>Сложность</span><strong id="recommendationModalComplexity"></strong></div>
           </div>
-          <div>
-            <span>Сложность</span>
-            <strong id="recommendationModalComplexity"></strong>
+          <div class="modal-card__section">
+            <h3>Почему появилась рекомендация</h3>
+            <p id="recommendationModalWhy"></p>
           </div>
-        </div>
-        <div class="modal-card__section">
-          <h3>Почему появилась рекомендация</h3>
-          <p id="recommendationModalWhy"></p>
-        </div>
-        <div class="modal-card__grid">
-          <div><span>Улучшает критерий</span><strong id="recommendationModalCriterion"></strong></div>
-          <div><span>Пример изменения</span><strong id="recommendationModalExample"></strong></div>
-        </div>
-        <div class="modal-card__section">
-          <h3>Что именно изменить</h3>
-          <p id="recommendationModalAction"></p>
+          <div class="modal-card__grid">
+            <div><span>Улучшает критерий</span><strong id="recommendationModalCriterion"></strong></div>
+            <div><span>Пример изменения</span><strong id="recommendationModalExample"></strong></div>
+          </div>
+          <div class="modal-card__section">
+            <h3>Что именно изменить</h3>
+            <p id="recommendationModalAction"></p>
+          </div>
         </div>
         <div class="modal-card__actions">
           <button class="button" type="button" id="recommendationModalAccept">Учту</button>

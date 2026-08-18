@@ -50,8 +50,12 @@ assert(app.includes("report-list-item__text"), "Report lists must render text se
 assert(html.includes("Что требует доработки"), "Report issue heading must stay compact");
 assert(app.includes("data-detail"), "Recommendation details control must remain available");
 assert(html.includes("recommendationProgressBar"), "Recommendation planning progress must remain available");
-assert(html.includes('id="recommendationPlan" tabindex="0"'), "Recommendation cards must expose a keyboard-scrollable region");
-assert(/#resultsStage \.recommendation-grid\s*\{[^}]*overflow-y:\s*auto/s.test(css), "Recommendation cards must have a vertical scroll region");
+assert(html.includes('class="recommendation-modal__content"'), "Recommendation modal must separate its scrollable content");
+assert(/#resultsStage \.recommendation-grid\s*\{[^}]*overflow:\s*visible/s.test(css), "Recommendation cards must remain fully visible in page flow");
+assert(/#recommendationModal \.recommendation-modal__content\s*\{[^}]*overflow-y:\s*auto/s.test(css), "Recommendation modal content must scroll vertically");
+assert(/#recommendationModal \.modal-card\s*\{[^}]*max-height:\s*90vh[^}]*display:\s*flex/s.test(css), "Recommendation modal must stay within the viewport");
+assert(app.includes('querySelector(".recommendation-modal__content").scrollTop = 0'), "Recommendation modal must open at the beginning of long content");
+assert(!/function closeRecommendationModal\(\)[\s\S]*?scrollTo\(/.test(app), "Closing the recommendation modal must preserve page scroll position");
 assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual interpolation");
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");

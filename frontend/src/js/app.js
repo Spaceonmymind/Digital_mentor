@@ -1033,6 +1033,7 @@ function openRecommendationModal(item) {
   elements.recommendationModalAccept.textContent = state.checkedRecommendations.has(String(item.priority)) ? "Отменить" : "Учту";
   elements.recommendationModal.hidden = false;
   document.body.classList.add("is-modal-open");
+  elements.recommendationModal.querySelector(".recommendation-modal__content").scrollTop = 0;
   elements.recommendationModalOk.focus();
 }
 
