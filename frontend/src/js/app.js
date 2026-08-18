@@ -720,7 +720,7 @@ function renderResults(result) {
                 ${strengths.length ? `<strong>Сильные стороны</strong><ul>${strengths.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
                 ${issues.length ? `<strong>Что доработать</strong><ul>${issues.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
                 ${recommendations.length ? `<strong>Рекомендации</strong><ul>${recommendations.map((item) => `<li>${item}</li>`).join("")}</ul>` : ""}
-                ${evidence.length ? `<strong>Доказательства</strong>${evidence.map((item, index) => `<div class="criterion__evidence"><p>${item.quote || item.section || "Связанный фрагмент"}</p><button class="button button--ghost" type="button" data-show-evidence="${code}:${index}">${item.source_type === "pdf" && item.page ? "Показать в документе" : "Показать фрагмент"}</button></div>`).join("")}` : ""}
+                ${evidence.length ? `<div class="criterion__evidence-heading"><strong>Фрагменты документа</strong><span>${evidence.length}</span></div>${evidence.slice(0, 2).map((item, index) => `<div class="criterion__evidence"><p><b>${item.section || item.criterion_code || "Фрагмент"}</b>${truncateToSentence(item.quote || "Связанный фрагмент документа", 130)}</p><button class="criterion__evidence-button" type="button" data-show-evidence="${code}:${index}">Открыть фрагмент</button></div>`).join("")}` : ""}
               </div>
             </details>
           ` : ""}
@@ -728,6 +728,7 @@ function renderResults(result) {
       `},
     )
     .join("");
+  bindEvidenceButtons(elements.criteriaList);
 
   document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Предварительная оценка цифрового ментора" : "Итоговая оценка";
   document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score} / 60` : `${normalized.overall_score} / 100`;
@@ -973,7 +974,20 @@ function renderRemark() {
         .join("")}
     </div>
   `;
+  bindEvidenceButtons(elements.remarkContent);
   elements.remarkTabs.innerHTML = "";
+}
+
+function bindEvidenceButtons(container) {
+  container.querySelectorAll("[data-show-evidence]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const [code, index] = button.dataset.showEvidence.split(":");
+      openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
+    });
+  });
+  container.querySelectorAll("[data-evidence-index]").forEach((button) => {
+    button.addEventListener("click", () => openEvidence(state.evidence[Number(button.dataset.evidenceIndex)]));
+  });
 }
 
 function getRecommendationNumber(priority) {
@@ -1591,16 +1605,6 @@ function bindEvents() {
     if (event.target === elements.historyModal) closeOverlay(elements.historyModal);
   });
 
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-show-evidence]");
-    if (button) {
-      const [code, index] = button.dataset.showEvidence.split(":");
-      openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
-      return;
-    }
-    const sourceButton = event.target.closest("[data-evidence-index]");
-    if (sourceButton) openEvidence(state.evidence[Number(sourceButton.dataset.evidenceIndex)]);
-  });
   elements.metricsButton.addEventListener("click", openMetrics);
   elements.metricsModalClose.addEventListener("click", () => closeOverlay(elements.metricsModal));
   elements.documentModalClose.addEventListener("click", () => closeOverlay(elements.documentModal));

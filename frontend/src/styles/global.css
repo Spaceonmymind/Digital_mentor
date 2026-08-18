@@ -4430,6 +4430,81 @@ body.is-modal-open {
 .criterion__evidence { margin-top: 8px; padding: 10px; border-left: 3px solid var(--green-main); background: white; }
 .criterion__evidence .button { margin-top: 8px; }
 
+#resultsStage .criterion__evidence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#resultsStage .criterion__evidence-heading span {
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #256569;
+  background: rgba(0, 152, 175, 0.12);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+#resultsStage .criterion__evidence {
+  margin-top: 7px;
+  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(0, 107, 128, 0.12);
+  border-left: 3px solid #168498;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+#resultsStage .criterion__evidence p {
+  min-width: 0;
+  margin: 0;
+  color: #5b7075;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#resultsStage .criterion__evidence p b {
+  display: block;
+  margin-bottom: 3px;
+  overflow: hidden;
+  color: #28464b;
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#resultsStage .criterion__evidence-button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid rgba(0, 107, 128, 0.22);
+  border-radius: 9px;
+  color: #145966;
+  background: #eef7f8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+#resultsStage .criterion__evidence-button:hover {
+  border-color: rgba(0, 107, 128, 0.45);
+  background: #e1f1f3;
+}
+
+@media (max-width: 760px) {
+  #resultsStage .criterion__evidence { grid-template-columns: 1fr; }
+  #resultsStage .criterion__evidence-button { width: 100%; }
+}
+
 .modal-card--wide { width: min(920px, calc(100vw - 32px)); }
 .metrics-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
 .metrics-grid > div { display: grid; gap: 5px; padding: 14px; border-radius: 14px; background: rgba(0, 107, 128, 0.07); }
