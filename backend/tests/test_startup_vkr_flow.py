@@ -12,6 +12,7 @@ from app.execution.models import AgentResult, AgentTaskRun, GateDecision, Mentor
 from app.execution.schemas import CriticOutput, DemoAgentOutput, DemoFinalReport, MentorReport, WorkerIndicatorOutput
 from app.execution.startup_vkr import StartupVkrAgentFlow
 from app.llm.registry import CRITIC, FINAL_EXPERT, WORKER
+from app.llm.errors import LLMResponseValidationError
 from app.llm.schemas import LLMResult, LLMUsage
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion
 from app.methodology.seeds.startup_vkr.data import A15_CHECKS
@@ -226,6 +227,14 @@ class FailingDemoFinalLLM(FakeStartupLLM):
         return await super().ask(model, system_prompt, user_prompt, response_model, **kwargs)
 
 
+class EmptyA28DemoLLM(FakeStartupLLM):
+    async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
+        if response_model is DemoAgentOutput and "C3, C6" in user_prompt:
+            self.calls.append({"model": model, "response_model": response_model.__name__, "user_prompt": user_prompt, **kwargs})
+            raise LLMResponseValidationError({"reason": "empty content"})
+        return await super().ask(model, system_prompt, user_prompt, response_model, **kwargs)
+
+
 @pytest.mark.asyncio
 async def test_startup_vkr_seed_creates_real_methodology_without_demo_plan_items():
     document = await seed_document("ВКР описывает стартап и механизм цифрового сервиса.")
@@ -432,6 +441,47 @@ async def test_startup_vkr_demo_flow_falls_back_when_final_json_is_invalid():
     assert task_run.error_code == "DEMO_FINAL_FALLBACK"
     assert final_result.llm_call_id is None
     assert "собран из результатов независимых проверок" in payload.verdict
+
+
+@pytest.mark.asyncio
+async def test_startup_vkr_demo_retries_and_isolates_empty_agent_response():
+    document = await seed_document("Резюме проекта. Проблема KYC. Архитектура DID Wallet Verifier. Экономика SAM NPV. Риски отказов.")
+    llm = EmptyA28DemoLLM()
+    async with async_session_factory() as session:
+        await ensure_startup_vkr_seed(session)
+        pipeline = await PipelineService(session).build(
+            PipelineBuildRequest(artifact_type="STARTUP_VKR", artifact_id=document.id, filename=document.original_name)
+        )
+        payload, metrics = await StartupVkrAgentFlow(session, llm_client=llm).execute_demo(
+            pipeline.assessment_id,
+            analysis_id="analysis-demo-agent-fallback",
+        )
+        runs = (
+            await session.execute(
+                select(AgentTaskRun).where(AgentTaskRun.assessment_id == pipeline.assessment_id)
+            )
+        ).scalars().all()
+        failed_calls = (
+            await session.execute(
+                select(LLMCall).where(
+                    LLMCall.assessment_id == pipeline.assessment_id,
+                    LLMCall.status == "failed",
+                )
+            )
+        ).scalars().all()
+
+    a28_calls = [call for call in llm.calls if call["response_model"] == "DemoAgentOutput" and "C3, C6" in call["user_prompt"]]
+    a28_run = next(run for run in runs if run.agent_code == "A-28")
+    assert len(a28_calls) == 2
+    assert payload.extra_blocks["mode"] == "demo"
+    assert payload.overall_score is not None
+    assert metrics["agent_time_a28"] >= 0
+    assert a28_run.status == "completed"
+    assert a28_run.error_code == "DEMO_AGENT_FALLBACK"
+    assert len(failed_calls) == 1
+    assert failed_calls[0].agent_code == "A-28"
+    assert failed_calls[0].requested_model == CRITIC
+    assert failed_calls[0].max_completion_tokens == 1200
 
 
 def test_mentor_report_rejects_internal_terms_and_invalid_stage_score():

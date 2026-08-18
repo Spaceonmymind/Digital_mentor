@@ -33,6 +33,7 @@ from app.execution.schemas import (
 )
 from app.execution.worker import WorkerExecutor
 from app.llm.client import LLMClient
+from app.llm.errors import LLMResponseValidationError
 from app.llm.registry import AGGREGATOR, CRITIC, FINAL_EXPERT, WORKER
 from app.llm.schemas import LLMCallTraceCreate, LLMResult
 from app.llm.trace_service import LLMTraceService
@@ -287,7 +288,26 @@ class StartupVkrAgentFlow:
                 f"<document_blocks>\n{context}\n</document_blocks>"
             )
             started = time.monotonic()
-            result = await self._ask(config["model"], system, user, DemoAgentOutput, 0, 1200)
+            result = None
+            error = None
+            for attempt in range(2):
+                try:
+                    result = await self._ask(config["model"], system, user, DemoAgentOutput, 0, 1200)
+                    break
+                except Exception as exc:
+                    error = exc
+                    if attempt == 0 and isinstance(exc, LLMResponseValidationError):
+                        logger.warning(
+                            "demo_agent_retry agent_code=%s model=%s error=%s",
+                            agent.code,
+                            config["model"],
+                            type(exc).__name__,
+                        )
+                        continue
+                    break
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            if result is None:
+                return agent.code, error or RuntimeError("Demo agent returned no result"), elapsed_ms
             sanitized_criteria = []
             for criterion in result.output.criteria:
                 evidence = [
@@ -298,19 +318,123 @@ class StartupVkrAgentFlow:
                 ]
                 sanitized_criteria.append(criterion.model_copy(update={"evidence": evidence}))
             result.output = result.output.model_copy(update={"criteria": sanitized_criteria})
-            return agent.code, result, int((time.monotonic() - started) * 1000)
+            return agent.code, result, elapsed_ms
 
         raw_results = await asyncio.gather(*(call_agent(agent) for agent, _, _ in runs), return_exceptions=True)
         saved: list[AgentExecutionResult] = []
         for (agent, task_run, idempotency_key), raw in zip(runs, raw_results, strict=True):
             if isinstance(raw, Exception):
-                await self._save_agent_failure(task_run, raw)
-                raise raw
+                raw = (agent.code, raw, 0)
             _, llm_result, agent_time_ms = raw
+            if isinstance(llm_result, Exception):
+                logger.warning(
+                    "demo_agent_failed_using_fallback assessment_id=%s agent_code=%s error=%s",
+                    assessment.id,
+                    agent.code,
+                    type(llm_result).__name__,
+                )
+                saved.append(
+                    await self._save_demo_agent_fallback(
+                        assessment.id,
+                        agent,
+                        task_run,
+                        idempotency_key,
+                        analysis_id,
+                        DEMO_AGENT_CONFIG[agent.code]["model"],
+                        llm_result,
+                        agent_time_ms,
+                    )
+                )
+                continue
             result = await self._save_agent_success(assessment.id, agent, task_run, llm_result, idempotency_key, analysis_id)
             result.latency_ms = agent_time_ms
             saved.append(result)
         return saved
+
+    async def _save_demo_agent_fallback(
+        self,
+        assessment_id: str,
+        agent: MethodologyAgent,
+        task_run: AgentTaskRun,
+        idempotency_key: str,
+        analysis_id: str | None,
+        requested_model: str,
+        exc: Exception,
+        latency_ms: int,
+    ) -> AgentExecutionResult:
+        failed_call = await self.trace_service.record(
+            LLMCallTraceCreate(
+                requested_model=requested_model,
+                aggregator=AGGREGATOR,
+                provider="unknown",
+                temperature=0,
+                max_completion_tokens=1200,
+                analysis_id=analysis_id,
+                assessment_id=assessment_id,
+                agent_task_run_id=task_run.id,
+                methodology_agent_id=agent.id,
+                agent_code=agent.code,
+                stage_code=agent.stage_code,
+                prompt_template_id=agent.prompt_template_id,
+                latency_ms=latency_ms,
+                status="failed",
+            )
+        )
+        config = DEMO_AGENT_CONFIG[agent.code]
+        output = DemoAgentOutput(
+            summary=f"{agent.code}: автоматический резервный вывод — ответ модели не удалось проверить.",
+            criteria=[
+                {
+                    "criterion_code": code,
+                    "score_recommendation": 4,
+                    "summary": "Недостаточно надежных данных для автоматической оценки этого критерия.",
+                    "strengths": [],
+                    "issues": ["Критерий требует повторной проверки после восстановления ответа модели."],
+                    "evidence": [],
+                    "confidence": 0.0,
+                }
+                for code in config["criteria"]
+            ],
+            recommendations=["Повторить специализированную проверку этого блока перед использованием итоговой оценки."],
+        )
+        agent_result = AgentResult(
+            assessment_id=assessment_id,
+            agent_task_run_id=task_run.id,
+            methodology_agent_id=agent.id,
+            agent_code=agent.code,
+            model_role=agent.model_role,
+            output_schema_code=agent.output_schema_code,
+            output_json=output.model_dump(mode="json"),
+            summary=output.summary,
+            confidence=0,
+            llm_call_id=None,
+            idempotency_key=idempotency_key,
+        )
+        task_run.status = "completed"
+        task_run.error_code = "DEMO_AGENT_FALLBACK"
+        task_run.completed_at = datetime.now(timezone.utc)
+        task_run.llm_call_id = failed_call.id
+        self.session.add_all([task_run, agent_result])
+        await self.session.commit()
+        await self.session.refresh(agent_result)
+        logger.info(
+            "demo_agent_fallback_saved assessment_id=%s agent_code=%s error_code=%s",
+            assessment_id,
+            agent.code,
+            getattr(exc, "code", type(exc).__name__),
+        )
+        return AgentExecutionResult(
+            task_run_id=task_run.id,
+            agent_result_id=agent_result.id,
+            agent_code=agent.code,
+            model_role=agent.model_role,
+            status="completed",
+            llm_call_id=failed_call.id,
+            tokens=0,
+            cost_rub=Decimal("0"),
+            provider="local_fallback",
+            latency_ms=latency_ms,
+        )
 
     async def _execute_demo_final(
         self,
