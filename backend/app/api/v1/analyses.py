@@ -314,6 +314,20 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
                 if not quote and not section:
                     continue
                 page, block_index, bbox, match_status = _locate_evidence(extracted, quote, section)
+                if source_type == "pdf" and not page:
+                    fallback_page, fallback_block_index, fallback_bbox, fallback_quote = _fallback_pdf_evidence(
+                        extracted,
+                        criterion.get("criterion_code") or "",
+                    )
+                    if fallback_page:
+                        page = fallback_page
+                        block_index = fallback_block_index
+                        bbox = fallback_bbox
+                        quote = quote or fallback_quote
+                    else:
+                        first_page = next(iter(extracted.get("pages") or []), {})
+                        page = first_page.get("page_number")
+                    match_status = "page_only"
                 key = (criterion.get("criterion_code"), quote, section)
                 if key in seen:
                     continue
@@ -333,7 +347,7 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
                         match_status=match_status if source_type == "pdf" else "fragment",
                     )
                 )
-                if page and bbox and criterion.get("criterion_code"):
+                if page and criterion.get("criterion_code"):
                     located_criteria.add(criterion.get("criterion_code"))
     if source_type == "pdf":
         for criterion_code in _EVIDENCE_TERMS:
