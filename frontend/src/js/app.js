@@ -935,13 +935,13 @@ function renderDocumentReview() {
 
 function renderRemark() {
   const remarks = state.remarks || documentRemarks;
-  const pdfEvidence = state.evidence.filter((item) => item.source_type === "pdf" && item.page);
+  const sourceEvidence = state.evidence.filter((item) => item.quote || item.section);
   elements.remarkContent.innerHTML = `
-    ${pdfEvidence.length ? `
+    ${sourceEvidence.length ? `
       <section class="source-evidence-panel">
-        <div><strong>Фрагменты в исходном PDF</strong><span>Откройте страницу с подсветкой исходного текста</span></div>
+        <div><strong>Фрагменты исходного документа</strong><span>Откройте цитату${sourceEvidence.some((item) => item.source_type === "pdf" && item.page) ? " или страницу PDF с подсветкой" : " из загруженного DOCX"}</span></div>
         <div class="source-evidence-panel__actions">
-          ${pdfEvidence.slice(0, 6).map((item) => `<button class="button button--ghost" type="button" data-evidence-index="${state.evidence.indexOf(item)}">${item.criterion_code || "Фрагмент"} · Показать в PDF</button>`).join("")}
+          ${sourceEvidence.slice(0, 8).map((item) => `<button class="button button--ghost" type="button" data-evidence-index="${state.evidence.indexOf(item)}">${item.criterion_code || "Фрагмент"} · ${item.source_type === "pdf" && item.page ? "Показать в PDF" : "Показать фрагмент"}</button>`).join("")}
         </div>
       </section>
     ` : ""}
@@ -1357,6 +1357,8 @@ async function openMetrics() {
 function openEvidence(item) {
   if (!item) return;
   const isPdf = item.source_type === "pdf";
+  elements.documentModal.classList.toggle("is-pdf", isPdf);
+  elements.documentModal.classList.toggle("is-fragment", !isPdf);
   elements.documentModalTitle.textContent = isPdf ? `Исходный PDF${item.page ? ` · страница ${item.page}` : ""}` : "Фрагмент DOCX";
   elements.documentEvidenceQuote.textContent = item.quote || item.section || "Связанный фрагмент без точной цитаты.";
   elements.documentEvidenceNotice.textContent = item.match_status === "exact"
@@ -1377,6 +1379,7 @@ function openEvidence(item) {
   }
   elements.documentModal.hidden = false;
   document.body.classList.add("is-modal-open");
+  elements.documentModal.querySelector(".document-viewer").focus();
 }
 
 function openFullscreen() {
@@ -1588,16 +1591,15 @@ function bindEvents() {
     if (event.target === elements.historyModal) closeOverlay(elements.historyModal);
   });
 
-  elements.criteriaList.addEventListener("click", (event) => {
+  document.addEventListener("click", (event) => {
     const button = event.target.closest("[data-show-evidence]");
-    if (!button) return;
-    const [code, index] = button.dataset.showEvidence.split(":");
-    openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
-  });
-  elements.remarkContent.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-evidence-index]");
-    if (!button) return;
-    openEvidence(state.evidence[Number(button.dataset.evidenceIndex)]);
+    if (button) {
+      const [code, index] = button.dataset.showEvidence.split(":");
+      openEvidence(state.evidence.filter((item) => item.criterion_code === code)[Number(index)]);
+      return;
+    }
+    const sourceButton = event.target.closest("[data-evidence-index]");
+    if (sourceButton) openEvidence(state.evidence[Number(sourceButton.dataset.evidenceIndex)]);
   });
   elements.metricsButton.addEventListener("click", openMetrics);
   elements.metricsModalClose.addEventListener("click", () => closeOverlay(elements.metricsModal));

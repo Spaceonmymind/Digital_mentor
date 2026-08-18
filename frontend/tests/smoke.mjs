@@ -60,8 +60,10 @@ assert(app.includes("requestAnimationFrame"), "Progress must use smooth visual i
 assert(app.includes("visualProgressCeiling"), "Visual progress must have safe stage ceilings");
 assert(app.includes("getAnalysisMetrics"), "Metrics modal must use saved backend metrics");
 assert(app.includes("data-show-evidence"), "Evidence navigation control is missing");
-assert(app.includes("Фрагменты в исходном PDF"), "PDF evidence must be visible in the objections section");
+assert(app.includes("Фрагменты исходного документа"), "Source evidence must be visible in the objections section");
 assert(app.includes("data-evidence-index"), "PDF evidence buttons must open from the objections section");
+assert(app.includes('classList.toggle("is-fragment"'), "DOCX evidence must use the compact fragment modal");
+assert(/#documentModal\.is-fragment \.document-viewer\s*\{[^}]*width:\s*min\(560px/s.test(css), "DOCX fragment modal must stay compact");
 assert(app.includes("getDocumentPagePreviewUrl"), "PDF evidence must use a rendered source page");
 assert(app.includes("item.bbox"), "PDF evidence highlight must use extraction bbox");
 assert(app.includes("DIGITAL_MENTOR_RECOMMENDATIONS"), "Recommendation state must persist in localStorage");

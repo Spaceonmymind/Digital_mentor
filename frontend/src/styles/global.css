@@ -4120,6 +4120,39 @@ body.is-modal-open {
 .recommendation-card.is-checked { opacity: .58; }
 
 .document-viewer { overflow-y: auto; }
+.document-viewer:focus { outline: none; }
+
+#documentModal.is-fragment .document-viewer {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(76vh, 560px);
+  padding: 28px 30px;
+  overflow-y: auto;
+}
+
+#documentModal.is-fragment .document-viewer h2 {
+  max-width: calc(100% - 52px);
+  margin-bottom: 10px;
+  font-size: clamp(24px, 2.2vw, 30px);
+  line-height: 1.15;
+}
+
+#documentModal.is-fragment #documentEvidenceNotice {
+  margin-bottom: 14px;
+  color: #607277;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+#documentModal.is-fragment #documentEvidenceQuote {
+  margin: 0;
+  padding: 16px 18px;
+  border-left: 4px solid #0098af;
+  border-radius: 14px;
+  background: #eef7f8;
+  color: #263d42;
+  font-size: 15px;
+  line-height: 1.6;
+}
 .pdf-evidence-page { position: relative; width: min(100%, 860px); margin: 12px auto 0; background: #dbe5e7; box-shadow: 0 18px 48px rgba(10,31,38,.18); }
 .pdf-evidence-page img { width: 100%; height: auto; display: block; }
 .pdf-evidence-highlight { position: absolute; z-index: 2; border: 2px solid #e09b18; border-radius: 4px; background: rgba(255,210,73,.38); box-shadow: 0 0 0 3px rgba(255,255,255,.55), 0 0 24px rgba(224,155,24,.55); pointer-events: none; animation: evidencePulse 1.4s ease-in-out 2; }
