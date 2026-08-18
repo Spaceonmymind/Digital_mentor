@@ -1110,7 +1110,7 @@ class StartupVkrAgentFlow:
         document = await self.session.get(Document, assessment.artifact_id)
         if document is None:
             raise execution_error("AI_DOCUMENT_TEXT_NOT_FOUND", "Документ не найден", status_code=404)
-        text = DocumentExcerptBuilder(max_chars=24000).build(document)
+        text = DocumentExcerptBuilder(max_chars=14000).build(document)
         paragraphs = [item.strip() for item in text.split("\n\n") if item.strip()]
         full = "\n\n".join(paragraphs)
         specs = {
@@ -1149,7 +1149,7 @@ class StartupVkrAgentFlow:
         result = {}
         for name, items in blocks.items():
             value = "\n\n".join(items).strip() or fallback[name]
-            result[name] = value[:5000]
+            result[name] = self._truncate_to_sentence(value, 2600)
         return result
 
     async def _check_cost_or_raise(self, assessment_id: str, next_role: str) -> None:

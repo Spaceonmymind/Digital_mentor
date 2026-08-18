@@ -514,7 +514,9 @@ async function setFile(file) {
   setMentor("uploading", "Получаю документ и проверяю возможность обработки.");
 
   try {
-    const documentMetadata = await uploadDocument(file);
+    const documentMetadata = await uploadDocument(file, (status) => {
+      if (status === "pending") setMentor("uploading", "Извлекаю текст и структуру документа. Это обычно занимает несколько секунд.", { silent: true });
+    });
     state.document = documentMetadata;
     elements.fileName.textContent = documentMetadata.name;
     elements.fileMeta.textContent = `${extension} · ${formatFileSize(documentMetadata.size)}`;
