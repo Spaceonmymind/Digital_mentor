@@ -49,6 +49,13 @@ assert(app.includes("truncateToSentence"), "Report previews must truncate at sen
 assert(app.includes("report-list-item__icon"), "Report lists must render a separate icon element");
 assert(app.includes("report-list-item__text"), "Report lists must render text separately from the icon");
 assert(html.includes("Что требует доработки"), "Report issue heading must stay compact");
+const chatSectionIndex = html.indexOf("Диалог с цифровым ментором");
+const directionsSectionIndex = html.indexOf("Как вы хотите улучшить работу?");
+const inlineHistoryIndex = html.indexOf("История анализов", directionsSectionIndex);
+const nextStepSectionIndex = html.indexOf("Один вопрос и следующий шаг");
+assert(chatSectionIndex < directionsSectionIndex, "Mentor chat must appear before improvement directions");
+assert(directionsSectionIndex < inlineHistoryIndex, "Improvement directions must appear before inline history");
+assert(inlineHistoryIndex < nextStepSectionIndex, "One question and next step must appear after inline history");
 assert(app.includes("data-detail"), "Recommendation details control must remain available");
 assert(html.includes("recommendationProgressBar"), "Recommendation planning progress must remain available");
 assert(html.includes('class="recommendation-modal__content"'), "Recommendation modal must separate its scrollable content");
