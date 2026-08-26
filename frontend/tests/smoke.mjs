@@ -92,6 +92,8 @@ assert(!app.includes("synthesizeAnalysisSpeech"), "Analysis TTS generation must 
 assert(!app.includes("remoteText"), "Chat and recommendations must stay silent");
 assert(!app.includes("await speakMentor(response.answer"), "Chat answers must not be spoken");
 assert(app.includes('cue: "greeting"'), "Greeting cue is missing");
+const beginWorkBody = app.slice(app.indexOf("function beginWork"), app.indexOf("function configureSpeechService"));
+assert(!beginWorkBody.includes('cue: "greeting"'), "Begin work must not repeat the greeting cue");
 assert(app.includes('cue: "uploading"'), "Upload cue is missing");
 assert(app.includes('cue: "analysis"'), "Analysis cue is missing");
 assert(app.includes('cue: "completed"'), "Completion cue is missing");
