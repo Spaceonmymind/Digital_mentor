@@ -84,18 +84,21 @@ assert(app.includes("DIGITAL_MENTOR_RECOMMENDATIONS"), "Recommendation state mus
 assert(app.includes("saveRecommendationState"), "Recommendation changes must be persisted");
 assert(app.includes("source_type === \"pdf\""), "PDF-only viewer behavior is missing");
 assert(!app.includes("setMentor(voiceWillPlay ? \"speaking\" : \"success\", response.answer"), "Full chat answer must not be copied into mascot bubble");
-assert(speech.includes("RemoteTtsSpeechService"), "Missing remote TTS service");
-assert(speech.includes("BrowserSpeechService"), "Missing browser TTS fallback");
-assert(speech.includes("DisabledSpeechService"), "Missing disabled speech service");
-assert(app.includes('speakMentor(response.answer, false, { remoteText: true })'), "Mentor chat must request remote TTS");
-assert(app.includes("await speakMentor(response.answer"), "Mentor text must wait for remote audio playback to start");
-assert(app.includes('typing.textContent = "Подготавливаю голосовой ответ."'), "Chat must show voice preparation state");
-assert(app.includes("speechService.hasPrerecorded?.(message)"), "Remote TTS must allow prerecorded standard phrases");
+assert(speech.includes("PrerecordedSpeechService"), "Missing prerecorded speech service");
+assert(!speech.includes("RemoteTtsSpeechService"), "Remote TTS must not be used by the frontend");
+assert(!speech.includes("BrowserSpeechService"), "Browser text-to-speech must be disabled");
+assert(!speech.includes("SpeechSynthesisUtterance"), "Arbitrary browser speech must be disabled");
+assert(!app.includes("synthesizeAnalysisSpeech"), "Analysis TTS generation must not run");
+assert(!app.includes("remoteText"), "Chat and recommendations must stay silent");
+assert(!app.includes("await speakMentor(response.answer"), "Chat answers must not be spoken");
+assert(app.includes('cue: "greeting"'), "Greeting cue is missing");
+assert(app.includes('cue: "uploading"'), "Upload cue is missing");
+assert(app.includes('cue: "analysis"'), "Analysis cue is missing");
+assert(app.includes('cue: "completed"'), "Completion cue is missing");
 assert(app.includes("if (options.silent) return;"), "Mentor speech must support silent UI transitions");
-assert(app.includes("{ silent: true }"), "Begin-work transition must not repeat the greeting");
 assert(speech.includes("PRERECORDED_SPEECH"), "Missing prerecorded speech mapping");
-assert(speech.includes("/src/assets/audio/greeting.mp3"), "Missing prerecorded greeting mapping");
-for (const audioFile of speech.matchAll(/\/src\/assets\/audio\/([^"']+\.mp3)/g)) {
+assert.equal([...speech.matchAll(/\/src\/assets\/audio\/([^"']+\.wav)/g)].length, 4, "Exactly four WAV cues must remain");
+for (const audioFile of speech.matchAll(/\/src\/assets\/audio\/([^"']+\.wav)/g)) {
   assert(existsSync(resolve(root, "src/assets/audio", audioFile[1])), `Missing prerecorded audio ${audioFile[1]}`);
 }
 assert(mascot.includes("fallbackGif"), "Missing mascot GIF fallback");

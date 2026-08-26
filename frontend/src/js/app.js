@@ -21,12 +21,11 @@ import {
   getDocumentPagePreviewUrl,
   getPublicConfig,
   startDetailedReport,
-  synthesizeAnalysisSpeech,
 } from "./api.js";
 import { uploadDocument } from "./modules/upload.js";
 import { runAnalysis } from "./modules/analysis.js";
 import { askMentorApi } from "./modules/chat.js";
-import { BrowserSpeechService, BrowserSttService, DisabledSpeechService, RemoteTtsSpeechService } from "./modules/speech.js";
+import { BrowserSttService, PrerecordedSpeechService } from "./modules/speech.js";
 import { MascotController } from "./modules/mascot.js";
 import { checkReadiness } from "./modules/readiness.js";
 import { requestImprovementDirection } from "./modules/recommendations.js";
@@ -43,6 +42,7 @@ const state = {
   sidebarCollapsed: true,
   publicConfig: { demo_mode: false, frontend_mock_mode: false, tts_mode: "browser" },
   speechToken: 0,
+  currentSpeechCue: "greeting",
   ttsStatus: "idle",
   uiState: "welcome",
   result: null,
@@ -179,7 +179,7 @@ const elements = {
   readinessTable: document.getElementById("readinessTable"),
 };
 
-let speechService = new BrowserSpeechService();
+let speechService = new PrerecordedSpeechService();
 const sttService = new BrowserSttService({
   onStart: () => {
     state.isListening = true;
@@ -248,6 +248,7 @@ function setMentor(status, message, speechOptions = {}) {
     success: "Анализ завершен",
     error: "Требуется действие",
   };
+  if (speechOptions.cue) state.currentSpeechCue = speechOptions.cue;
   mascot.setMascotState({ state: status, label: statusLabels[status] || statusLabels.idle, message: mentorPreview(status, message) });
   return speakMentor(message, false, speechOptions);
 }
@@ -270,50 +271,17 @@ function setTtsStatus(status) {
   updateSoundButton();
 }
 
-async function prepareMentorVoice(analysisId) {
-  if (!analysisId || FRONTEND_MOCK_MODE || state.publicConfig.tts_mode !== "remote") return;
-  setTtsStatus("generating");
-  try {
-    const result = await synthesizeAnalysisSpeech(analysisId);
-    if (result.status === "ready") {
-      setTtsStatus("ready");
-    } else if (result.status === "fallback") {
-      setTtsStatus("fallback");
-    } else {
-      setTtsStatus("failed");
-    }
-  } catch {
-    setTtsStatus("failed");
-  }
-}
-
 function speakMentor(message, force = false, options = {}) {
   if (options.silent) return;
   if (!state.sound || !state.speechReady || !isSpeechSupported()) return;
-  if (
-    state.publicConfig.tts_mode === "remote" &&
-    !options.analysisId &&
-    !options.remoteText &&
-    !speechService.hasPrerecorded?.(message)
-  ) return;
+  if (!speechService.hasCue(options.cue)) return;
   const token = ++state.speechToken;
   return speechService.speak(message, {
-    force,
-    analysisId: options.analysisId,
-    onPrepare: () => {
-      if (token !== state.speechToken) return;
-      setTtsStatus("generating");
-      mascot.setMascotState({ state: "speaking", message: "Подготавливаю голос..." });
-    },
-    onFallback: () => {
-      if (token !== state.speechToken) return;
-      setTtsStatus("fallback");
-      mascot.setMascotState({ state: "speaking", message: "Используется резервная озвучка." });
-    },
+    cue: options.cue,
     onUnavailable: () => {
       if (token !== state.speechToken) return;
       setTtsStatus("failed");
-      mascot.setMascotState({ state: "success", message: "Не удалось создать озвучку." });
+      showNotification("Не удалось воспроизвести записанную фразу.");
     },
     onStart: () => {
       setTtsStatus("ready");
@@ -337,9 +305,7 @@ function stopSpeech() {
 function updateSoundButton() {
   const labels = {
     idle: state.sound ? "Озвучивание включено" : "Озвучивание выключено",
-    generating: "Подготавливаю голос...",
     ready: state.sound ? "Озвучивание включено" : "Голос готов",
-    fallback: "Используется резервная озвучка",
     failed: "Повторить",
   };
   elements.avatarSoundButton.innerHTML = `<span data-icon="volume2"></span>${labels[state.ttsStatus] || labels.idle}`;
@@ -511,7 +477,7 @@ async function setFile(file) {
   elements.fileMeta.textContent = `${extension} · ${formatFileSize(file.size)}`;
   elements.filePreview.hidden = false;
   elements.startAnalysisButton.disabled = true;
-  setMentor("uploading", "Получаю документ и проверяю возможность обработки.");
+  setMentor("uploading", "Получаю документ и проверяю возможность обработки.", { cue: "uploading" });
 
   try {
     const documentMetadata = await uploadDocument(file, (status) => {
@@ -1152,12 +1118,9 @@ async function askMentor(question) {
 
   try {
     const response = await askMentorApi(state.analysisId, question);
-    const voiceWillPlay = state.sound && state.speechReady && isSpeechSupported();
-    if (voiceWillPlay) typing.textContent = "Подготавливаю голосовой ответ.";
-    await speakMentor(response.answer, false, { remoteText: true });
     typing.remove();
     addMessage("mentor", response.answer);
-    setMentor(voiceWillPlay ? "speaking" : "success", voiceWillPlay ? "Озвучиваю рекомендацию…" : "Ответ готов", { silent: true });
+    setMentor("success", "Ответ готов", { silent: true });
   } catch (error) {
     typing.remove();
     const answer = getMentorAnswer(question);
@@ -1182,7 +1145,7 @@ async function startAnalysis() {
   animateVisualProgress();
   showStage("processing");
   renderAnalysisSteps(0, 0);
-  setMentor("thinking", analysisSteps[0].message);
+  setMentor("thinking", analysisSteps[0].message, { cue: "analysis" });
 
   try {
     const result = await runAnalysis(state.document.id, (status) => {
@@ -1228,13 +1191,12 @@ async function startAnalysis() {
     renderDirections();
     renderChat();
     startDetailedReportLoading();
-    if (!state.sound) prepareMentorVoice(state.analysisId);
     showStage("summary");
     const normalized = normalizeResult(result);
     setMentor(
       "success",
       normalized.spokenSummary || `Анализ завершен. Текущая стадия работы: ${normalized.currentStage || "не определена"}.`,
-      normalized.spokenSummary ? { analysisId: state.analysisId } : {},
+      { cue: "completed" },
     );
   } catch (error) {
     window.clearInterval(state.elapsedTimer);
@@ -1435,22 +1397,12 @@ function beginWork() {
   setMentor(
     "greeting",
     "Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.",
-    { silent: true },
+    { cue: "greeting" },
   );
 }
 
-function configureSpeechService(ttsMode) {
-  const browser = new BrowserSpeechService();
-  if (ttsMode === "remote") {
-    speechService = new RemoteTtsSpeechService({
-      fallback: browser,
-      onFallback: () => showNotification("Серверная озвучка недоступна, включен голос браузера."),
-    });
-  } else if (ttsMode === "disabled") {
-    speechService = new DisabledSpeechService();
-  } else {
-    speechService = browser;
-  }
+function configureSpeechService() {
+  speechService = new PrerecordedSpeechService();
 }
 
 async function loadPublicConfig() {
@@ -1458,13 +1410,13 @@ async function loadPublicConfig() {
     const config = await getPublicConfig();
     state.publicConfig = config;
     window.__MENTOR_DEMO_MODE__ = Boolean(config.demo_mode);
-    configureSpeechService(config.tts_mode);
+    configureSpeechService();
     document.body.classList.toggle("is-presentation-mode", Boolean(config.presentation_mode));
     elements.demoDocumentButton.hidden = !(config.demo_mode || FRONTEND_MOCK_MODE);
     elements.modeBanner.hidden = !(config.frontend_mock_mode || FRONTEND_MOCK_MODE);
   } catch (error) {
     window.__MENTOR_DEMO_MODE__ = false;
-    configureSpeechService("browser");
+    configureSpeechService();
     elements.modeBanner.hidden = !FRONTEND_MOCK_MODE;
     elements.demoDocumentButton.hidden = !FRONTEND_MOCK_MODE;
   }
@@ -1473,7 +1425,6 @@ async function loadPublicConfig() {
 function bindEvents() {
   if (isSpeechSupported()) {
     loadVoices();
-    window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
   }
 
   elements.navItems.forEach((item) => {
@@ -1507,7 +1458,7 @@ function bindEvents() {
   elements.reportButton.addEventListener("click", downloadReport);
   elements.finishDemoButton.addEventListener("click", () => {
     showStage("final");
-    setMentor("success", "Работа завершена. Отчет и рекомендации готовы к дальнейшей доработке.");
+    setMentor("success", "Работа завершена. Отчет и рекомендации готовы к дальнейшей доработке.", { silent: true });
   });
   elements.summaryReportButton.addEventListener("click", downloadReport);
   elements.finalReportButton.addEventListener("click", downloadReport);
@@ -1561,7 +1512,7 @@ function bindEvents() {
       fallbackText: direction.text,
     });
     elements.directionResult.textContent = answer;
-    setMentor("speaking", answer, { remoteText: true });
+    setMentor("speaking", answer, { silent: true });
   });
 
   elements.recommendationPlan.addEventListener("click", (event) => {
@@ -1657,7 +1608,7 @@ function bindEvents() {
         }
         state.lastSpokenMessage = "";
         showNotification("Звук включен. Сейчас Финик произнесет реплику.");
-        speakMentor(elements.mentorMessage.textContent, true, { analysisId: state.analysisId });
+        speakMentor(elements.mentorMessage.textContent, true, { cue: state.currentSpeechCue });
       } else {
         stopSpeech();
         showNotification("Звук выключен.");
@@ -1709,6 +1660,7 @@ async function init() {
   setMentor(
     "greeting",
     "Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.",
+    { cue: "greeting" },
   );
 }
 

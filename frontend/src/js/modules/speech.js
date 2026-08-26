@@ -1,92 +1,43 @@
-import { synthesizeAnalysisSpeech, synthesizeSpeech } from "../api.js";
-
 const PRERECORDED_SPEECH = new Map([
-  ["Добрый день! Я цифровой ментор. Загрузите работу, и я помогу определить ее сильные стороны и направления дальнейшего развития.", "/src/assets/audio/greeting.mp3"],
-  ["Загрузите работу, и я проведу комплексный анализ.", "/src/assets/audio/upload-prompt.mp3"],
-  ["Получаю документ и проверяю возможность обработки.", "/src/assets/audio/uploading.mp3"],
-  ["Документ получен. Я готов приступить к анализу.", "/src/assets/audio/document-ready.mp3"],
-  ["Проверяю документ и готовлю его к анализу.", "/src/assets/audio/analysis-prepare.mp3"],
-  ["Проверяю формат и структуру файла", "/src/assets/audio/check-format.mp3"],
-  ["Анализирую структуру работы", "/src/assets/audio/check-structure.mp3"],
-  ["Оцениваю аргументацию и логику", "/src/assets/audio/check-argumentation.mp3"],
-  ["Формирую рекомендации", "/src/assets/audio/generate-recommendations.mp3"],
-  ["Формирую ответ на ваш вопрос.", "/src/assets/audio/chat-thinking.mp3"],
-  ["Анализ отменен. Можно выбрать другой документ.", "/src/assets/audio/analysis-cancelled.mp3"],
-  ["Открываю подробный анализ работы.", "/src/assets/audio/open-details.mp3"],
-  ["Работа завершена. Отчет и рекомендации готовы к дальнейшей доработке.", "/src/assets/audio/work-completed.mp3"],
+  ["greeting", "/src/assets/audio/greeting.wav"],
+  ["uploading", "/src/assets/audio/uploading.wav"],
+  ["analysis", "/src/assets/audio/analysis.wav"],
+  ["completed", "/src/assets/audio/completed.wav"],
 ]);
 
 
-export class RemoteTtsSpeechService {
-  constructor({ fallback, onFallback } = {}) {
-    this.fallback = fallback;
-    this.onFallback = onFallback;
+export class PrerecordedSpeechService {
+  constructor() {
     this.audio = null;
-    this.failed = false;
     this.ready = false;
   }
 
   isAvailable() {
-    return !this.failed || Boolean(this.fallback?.isAvailable());
+    return typeof Audio !== "undefined";
   }
 
   enable() {
     this.ready = true;
-    this.fallback?.enable();
   }
 
-  loadVoices() {
-    this.fallback?.loadVoices();
+  loadVoices() {}
+
+  hasCue(cue) {
+    return PRERECORDED_SPEECH.has(cue);
   }
 
-  hasPrerecorded(text) {
-    return PRERECORDED_SPEECH.has(text.trim());
-  }
-
-  async speak(text, { force = false, analysisId, onPrepare, onFallback, onUnavailable, onStart, onEnd } = {}) {
-    const prerecordedUrl = PRERECORDED_SPEECH.get(text.trim());
-    if (this.ready && prerecordedUrl) {
-      this.stop();
-      return this.playAudio(prerecordedUrl, text, { force, onFallback, onUnavailable, onStart, onEnd });
-    }
-    if (!this.ready || this.failed) {
-      return this.fallback?.speak(text, { force, onStart, onEnd });
-    }
+  async speak(_text, { cue, onStart, onEnd, onUnavailable } = {}) {
+    const prerecordedUrl = PRERECORDED_SPEECH.get(cue);
+    if (!this.ready || !prerecordedUrl) return;
     this.stop();
     try {
-      onPrepare?.();
-      const result = analysisId ? await synthesizeAnalysisSpeech(analysisId) : await synthesizeSpeech({ text, voice_id: "mentor-default" });
-      if (result.status === "fallback" || !result.audio_url) {
-        this.onFallback?.();
-        onFallback?.();
-        return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
-      }
-      return this.playAudio(result.audio_url, text, { force, markRemoteFailed: true, onFallback, onUnavailable, onStart, onEnd });
-    } catch (error) {
-      this.onFallback?.();
-      onUnavailable?.();
-      return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
-    }
-  }
-
-  async playAudio(url, text, { force, markRemoteFailed = false, onFallback, onUnavailable, onStart, onEnd } = {}) {
-    try {
-      this.audio = new Audio(url);
+      this.audio = new Audio(prerecordedUrl);
       this.audio.onplay = () => onStart?.();
       this.audio.onended = () => onEnd?.();
-      this.audio.onerror = () => {
-        if (markRemoteFailed) this.failed = true;
-        this.onFallback?.();
-        onFallback?.();
-        this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
-      };
+      this.audio.onerror = () => onUnavailable?.();
       await this.audio.play();
     } catch {
-      if (markRemoteFailed) this.failed = true;
-      this.onFallback?.();
-      onFallback?.();
       onUnavailable?.();
-      return this.fallback?.speak(text, { force: true, onStart: () => {}, onEnd });
     }
   }
 
@@ -94,100 +45,6 @@ export class RemoteTtsSpeechService {
     if (this.audio) {
       this.audio.pause();
       this.audio.currentTime = 0;
-    }
-    this.fallback?.stop();
-  }
-}
-
-
-export class DisabledSpeechService {
-  isAvailable() {
-    return false;
-  }
-
-  enable() {}
-
-  loadVoices() {}
-
-  async speak() {}
-
-  stop() {}
-}
-
-
-export class BrowserSpeechService {
-  constructor() {
-    this.ready = false;
-    this.voices = [];
-    this.selectedVoice = null;
-    this.lastSpokenMessage = "";
-  }
-
-  isAvailable() {
-    return "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
-  }
-
-  enable() {
-    this.ready = true;
-    this.loadVoices();
-  }
-
-  loadVoices() {
-    if (!this.isAvailable()) return;
-    this.voices = window.speechSynthesis.getVoices();
-    this.selectedVoice =
-      this.voices.find((voice) => voice.lang.toLowerCase().startsWith("ru")) ||
-      this.voices.find((voice) => /russian|рус/i.test(voice.name)) ||
-      this.voices[0] ||
-      null;
-  }
-
-  normalize(text) {
-    return text
-      .replace(/\s+/g, " ")
-      .replace(/AI/gi, "эй ай")
-      .replace(/ИИ/g, "искусственного интеллекта")
-      .replace(/PDF/g, "пи ди эф")
-      .replace(/DOCX/g, "док икс")
-      .trim()
-      .slice(0, 700);
-  }
-
-  async speak(text, { force = false, onStart, onEnd } = {}) {
-    if (!this.ready || !this.isAvailable()) return;
-    const normalized = this.normalize(text);
-    if (!normalized || (!force && normalized === this.lastSpokenMessage)) return;
-
-    this.lastSpokenMessage = normalized;
-    this.stop();
-
-    const utterance = new SpeechSynthesisUtterance(normalized);
-    utterance.lang = "ru-RU";
-    utterance.rate = 1.12;
-    utterance.pitch = 1.08;
-    utterance.volume = 0.95;
-    utterance.onstart = () => onStart?.();
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
-
-    if (this.selectedVoice) {
-      utterance.voice = this.selectedVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
-    if (!this.voices.length) {
-      window.setTimeout(() => {
-        this.loadVoices();
-        if (!window.speechSynthesis.speaking && this.ready) {
-          window.speechSynthesis.speak(utterance);
-        }
-      }, 250);
-    }
-  }
-
-  stop() {
-    if (this.isAvailable()) {
-      window.speechSynthesis.cancel();
     }
   }
 }

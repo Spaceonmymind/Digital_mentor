@@ -109,23 +109,6 @@ export async function sendChatMessage(payload) {
 }
 
 
-export async function synthesizeSpeech(payload) {
-  const response = await fetch(`${API_BASE_URL}/tts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return parseResponse(response);
-}
-
-export async function synthesizeAnalysisSpeech(analysisId) {
-  const response = await fetch(`${API_BASE_URL}/tts/analyses/${analysisId}`, {
-    method: "POST",
-  });
-  return parseResponse(response);
-}
-
-
 export async function createReport(analysisId) {
   const response = await fetch(`${API_BASE_URL}/analyses/${analysisId}/reports`, {
     method: "POST",
