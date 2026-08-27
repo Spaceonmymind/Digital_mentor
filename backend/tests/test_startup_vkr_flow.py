@@ -68,12 +68,34 @@ def test_demo_score_calibration_rewards_relevant_content_but_caps_unrelated_text
         evidence=[],
         confidence=0.6,
     )
-    relevant = "Финансовая модель: затраты, выручка, инвестиции, себестоимость и окупаемость проекта."
-    assert StartupVkrAgentFlow._calibrate_demo_criterion(criterion, relevant).score_recommendation == 6
+    relevant = (
+        "Финансовая модель проекта содержит стартовые затраты, плановую выручку, объем инвестиций, "
+        "себестоимость продукта и срок окупаемости. Автор подробно объясняет исходные данные каждого расчета."
+    )
+    assert StartupVkrAgentFlow._calibrate_demo_criterion(criterion, relevant).score_recommendation == 7
 
     optimistic = criterion.model_copy(update={"score_recommendation": 8})
-    unrelated = "Обзор истории живописи и биография художника."
-    assert StartupVkrAgentFlow._calibrate_demo_criterion(optimistic, unrelated).score_recommendation == 3
+    unrelated = (
+        "Подробный обзор истории живописи рассказывает о биографии художника, его ранних картинах, "
+        "любимых цветах, выставках, культурном наследии и влиянии искусства на современное общество."
+    )
+    assert StartupVkrAgentFlow._calibrate_demo_criterion(optimistic, unrelated).score_recommendation == 2
+
+
+def test_demo_score_calibration_rejects_repeated_letters_and_ignores_service_headings():
+    spam = "А " * 500
+    for code in ("C1", "C2", "C3", "C4", "C5", "C6"):
+        criterion = DemoAgentCriterion(
+            criterion_code=code,
+            score_recommendation=9,
+            summary="Служебный заголовок ошибочно принят за содержание.",
+            strengths=[],
+            issues=["Нет содержательного текста."],
+            evidence=[],
+            confidence=0.1,
+        )
+        calibrated = StartupVkrAgentFlow._calibrate_demo_criterion(criterion, spam)
+        assert calibrated.score_recommendation == 0
 
 
 def test_demo_final_uses_specialist_consensus_instead_of_second_penalty():

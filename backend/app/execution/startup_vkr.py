@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 import time
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -275,6 +276,7 @@ class StartupVkrAgentFlow:
         async def call_agent(agent: MethodologyAgent):
             config = DEMO_AGENT_CONFIG[agent.code]
             context = "\n\n".join(f"## {name}\n{blocks.get(name, '')}" for name in config["block_names"]).strip()
+            calibration_context = "\n\n".join(blocks.get(name, "") for name in config["block_names"]).strip()
             system = (
                 f"Ты {agent.code}, demo-агент цифрового ментора: {config['title']}. "
                 "Работай быстро и кратко. Используй только переданный фрагмент документа. "
@@ -290,6 +292,8 @@ class StartupVkrAgentFlow:
                 "Не требуй от студенческого проекта уровня готового бизнеса, аудита или инвестиционной экспертизы. "
                 "Один недостающий факт снижает только связанную часть критерия и не должен обнулять все остальное. "
                 "Учитывай ясные объяснения, расчеты, примеры, таблицы, результаты и разумные предположения автора. "
+                "Названия разделов и служебные заголовки не являются содержанием. Если внутри только повторяющиеся буквы, символы, "
+                "слова-заполнители или бессмысленный текст, ставь 0-1. "
                 "Пиши простыми словами, короткими предложениями и без сложных терминов. Если термин необходим — сразу объясни его."
             )
             user = (
@@ -328,7 +332,7 @@ class StartupVkrAgentFlow:
                     for item in criterion.evidence
                 ]
                 sanitized = criterion.model_copy(update={"evidence": evidence})
-                sanitized_criteria.append(self._calibrate_demo_criterion(sanitized, context))
+                sanitized_criteria.append(self._calibrate_demo_criterion(sanitized, calibration_context))
             result.output = result.output.model_copy(update={"criteria": sanitized_criteria})
             return agent.code, result, elapsed_ms
 
@@ -690,18 +694,22 @@ class StartupVkrAgentFlow:
     @staticmethod
     def _calibrate_demo_criterion(criterion, context: str):
         normalized = " ".join(context.lower().split())
+        meaningful_words = re.findall(r"[a-zа-яё0-9]{3,}", normalized)
+        unique_words = set(meaningful_words)
+        if len(meaningful_words) < 12 or len(unique_words) < 8:
+            return criterion.model_copy(update={"score_recommendation": 0})
         matches = sum(1 for term in DEMO_CRITERION_TERMS[criterion.criterion_code] if term in normalized)
         score = criterion.score_recommendation
         if matches == 0:
-            score = min(score, 3)
+            score = min(score, 2)
         elif matches == 1:
             score = min(score, 4)
         elif matches >= 4:
-            score = max(score, 6)
-        else:
-            score = max(score, 5)
-        if matches >= 6 and any(item.quote for item in criterion.evidence):
             score = max(score, 7)
+        else:
+            score = max(score, 6)
+        if matches >= 6 and any(item.quote for item in criterion.evidence):
+            score = max(score, 8)
         return criterion.model_copy(update={"score_recommendation": score})
 
     @staticmethod
