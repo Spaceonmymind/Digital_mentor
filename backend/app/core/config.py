@@ -43,6 +43,7 @@ class Settings:
     polza_api_key: str | None = os.getenv("POLZA_API_KEY")
     polza_base_url: str = os.getenv("POLZA_BASE_URL", "https://polza.ai/api/v1")
     llm_request_timeout_seconds: float = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "60"))
+    llm_demo_request_timeout_seconds: float = float(os.getenv("LLM_DEMO_REQUEST_TIMEOUT_SECONDS", "25"))
     analysis_engine: str = os.getenv("ANALYSIS_ENGINE", "mock")
     ai_document_max_chars: int = int(os.getenv("AI_DOCUMENT_MAX_CHARS", "60000"))
     ai_document_excerpt_strategy: str = os.getenv("AI_DOCUMENT_EXCERPT_STRATEGY", "head_tail")

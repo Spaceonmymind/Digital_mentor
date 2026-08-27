@@ -294,7 +294,7 @@ class StartupVkrAgentFlow:
             error = None
             for attempt in range(2):
                 try:
-                    result = await self._ask(config["model"], system, user, DemoAgentOutput, 0, 1200)
+                    result = await self._ask_demo(config["model"], system, user, DemoAgentOutput, 0, 1200)
                     break
                 except Exception as exc:
                     error = exc
@@ -482,7 +482,7 @@ class StartupVkrAgentFlow:
         )
         try:
             started = time.monotonic()
-            llm_result = await self._ask(FINAL_EXPERT, system, user, DemoFinalReport, 0, 1800)
+            llm_result = await self._ask_demo(FINAL_EXPERT, system, user, DemoFinalReport, 0, 1800)
             result = await self._save_agent_success(assessment.id, agent, task_run, llm_result, idempotency_key, analysis_id)
             result.latency_ms = int((time.monotonic() - started) * 1000)
             return result
@@ -787,6 +787,20 @@ class StartupVkrAgentFlow:
 
     async def _ask(self, model: str, system: str, user: str, response_model, temperature: float, max_tokens: int):
         client = self.llm_client or LLMClient()
+        return await client.ask(
+            model=model,
+            system_prompt=system,
+            user_prompt=user,
+            response_model=response_model,
+            temperature=temperature,
+            max_completion_tokens=max_tokens,
+        )
+
+    async def _ask_demo(self, model: str, system: str, user: str, response_model, temperature: float, max_tokens: int):
+        client = self.llm_client or LLMClient(
+            timeout=settings.llm_demo_request_timeout_seconds,
+            max_retries=0,
+        )
         return await client.ask(
             model=model,
             system_prompt=system,

@@ -11,6 +11,7 @@ from app.db.session import async_session_factory
 from app.execution.models import AgentResult, AgentTaskRun, GateDecision, MentorAnalysisResult
 from app.execution.schemas import CriticOutput, DemoAgentOutput, DemoFinalReport, MentorReport, WorkerIndicatorOutput
 from app.execution.startup_vkr import StartupVkrAgentFlow
+from app.execution import startup_vkr as startup_vkr_module
 from app.llm.registry import CRITIC, FINAL_EXPERT, WORKER
 from app.llm.errors import LLMResponseValidationError
 from app.llm.schemas import LLMResult, LLMUsage
@@ -34,6 +35,27 @@ class FakeUpload:
             return b""
         self.done = True
         return self.content
+
+
+@pytest.mark.asyncio
+async def test_demo_llm_client_has_bounded_timeout_and_no_provider_retries(monkeypatch):
+    captured = {}
+
+    class CapturingClient:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        async def ask(self, **kwargs):
+            captured["ask"] = kwargs
+            return "demo-result"
+
+    monkeypatch.setattr(startup_vkr_module, "LLMClient", CapturingClient)
+    flow = StartupVkrAgentFlow(None)
+    result = await flow._ask_demo(WORKER, "system", "user", DemoAgentOutput, 0, 1200)
+
+    assert result == "demo-result"
+    assert captured["timeout"] == 25
+    assert captured["max_retries"] == 0
 
 
 def docx_bytes(text: str) -> bytes:

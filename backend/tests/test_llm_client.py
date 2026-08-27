@@ -146,6 +146,11 @@ async def test_llm_client_retries_retryable_errors():
     assert result.status == "success"
 
 
+def test_llm_client_disables_sdk_level_retries():
+    client = LLMClient(api_key="test-key", base_url="http://llm.test/v1", max_retries=2)
+    assert client._client.max_retries == 0
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("status_code", "error_code"),
