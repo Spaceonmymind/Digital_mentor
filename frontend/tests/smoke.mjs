@@ -91,6 +91,8 @@ assert(!speech.includes("SpeechSynthesisUtterance"), "Arbitrary browser speech m
 assert(!app.includes("synthesizeAnalysisSpeech"), "Analysis TTS generation must not run");
 assert(!app.includes("remoteText"), "Chat and recommendations must stay silent");
 assert(!app.includes("await speakMentor(response.answer"), "Chat answers must not be spoken");
+assert(/\.chat-message\s*\{[^}]*white-space:\s*pre-wrap/s.test(css), "Chat messages must preserve readable paragraphs");
+assert(app.includes('addMessage("mentor", response.answer)'), "Chat must render the formatted backend answer");
 assert(app.includes('cue: "greeting"'), "Greeting cue is missing");
 const beginWorkBody = app.slice(app.indexOf("function beginWork"), app.indexOf("function configureSpeechService"));
 assert(!beginWorkBody.includes('cue: "greeting"'), "Begin work must not repeat the greeting cue");

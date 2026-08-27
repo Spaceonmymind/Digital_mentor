@@ -1803,6 +1803,8 @@ button {
   padding: 12px 14px;
   border-radius: 16px;
   line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .chat-message.is-mentor {

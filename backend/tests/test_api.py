@@ -42,6 +42,12 @@ def make_docx_bytes(text: str = "Методы исследования") -> byte
     return buffer.getvalue()
 
 
+def test_chat_answer_is_split_into_readable_paragraphs():
+    answer = "Первое предложение. Второе предложение. Третье предложение. Четвертое предложение."
+    formatted = chat_service._format_chat_answer(answer)
+    assert formatted == "Первое предложение. Второе предложение.\n\nТретье предложение. Четвертое предложение."
+
+
 def test_pdf_evidence_location_uses_exact_quote_and_bbox():
     payload = {
         "pages": [
@@ -852,6 +858,7 @@ async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeyp
     class FakeChatLLM:
         async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
             captured["user_prompt"] = user_prompt
+            captured["system_prompt"] = system_prompt
             captured["max_completion_tokens"] = kwargs.get("max_completion_tokens")
             return LLMResult(
                 output=response_model(answer="Покажите фрагмент про сравнительный подход и добавьте критерии проверки."),
@@ -900,4 +907,6 @@ async def test_startup_vkr_chat_uses_relevant_document_fragments(client, monkeyp
     assert response.status_code == 200, response.text
     assert "Релевантные фрагменты исходного документа" in captured["user_prompt"]
     assert "Для анализа был использован сравнительный подход" in captured["user_prompt"]
-    assert captured["max_completion_tokens"] == 2200
+    assert captured["max_completion_tokens"] == 1400
+    assert "простыми словами" in captured["system_prompt"]
+    assert "Разделяй ответ пустыми строками" in captured["system_prompt"]

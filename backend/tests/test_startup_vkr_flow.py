@@ -138,7 +138,7 @@ class FakeStartupLLM:
         )
 
     async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
-        self.calls.append({"model": model, "response_model": response_model.__name__, "user_prompt": user_prompt, **kwargs})
+        self.calls.append({"model": model, "response_model": response_model.__name__, "system_prompt": system_prompt, "user_prompt": user_prompt, **kwargs})
         if response_model is WorkerIndicatorOutput:
             output = WorkerIndicatorOutput(
                 status="partially_satisfied",
@@ -392,6 +392,11 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
     assert {call["response_model"] for call in llm.calls} == {"DemoAgentOutput", "DemoFinalReport"}
     assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"} == {1200}
     assert {call["max_completion_tokens"] for call in llm.calls if call["response_model"] == "DemoFinalReport"} == {1800}
+    demo_agent_prompts = [call["system_prompt"] for call in llm.calls if call["response_model"] == "DemoAgentOutput"]
+    assert all("учебную работу" in prompt and "Не требуй" in prompt for prompt in demo_agent_prompts)
+    final_prompt = next(call["system_prompt"] for call in llm.calls if call["response_model"] == "DemoFinalReport")
+    assert "не применяй к ним второй штраф" in final_prompt
+    assert "простыми словами" in final_prompt
     assert metrics["mode"] == "demo"
     assert metrics["agent_time_a15"] >= 0
     assert payload.methodology.methodology_version == "2.0"
