@@ -9,7 +9,7 @@ from app.assessment.models import IndicatorResult
 from app.db.models import Analysis, AnalysisResult, Document, LLMCall
 from app.db.session import async_session_factory
 from app.execution.models import AgentResult, AgentTaskRun, GateDecision, MentorAnalysisResult
-from app.execution.schemas import CriticOutput, DemoAgentOutput, DemoFinalReport, MentorReport, WorkerIndicatorOutput
+from app.execution.schemas import CriticOutput, DemoAgentCriterion, DemoAgentOutput, DemoFinalReport, MentorReport, WorkerIndicatorOutput
 from app.execution.startup_vkr import StartupVkrAgentFlow
 from app.execution import startup_vkr as startup_vkr_module
 from app.llm.registry import CRITIC, FINAL_EXPERT, WORKER
@@ -56,6 +56,61 @@ async def test_demo_llm_client_has_bounded_timeout_and_no_provider_retries(monke
     assert result == "demo-result"
     assert captured["timeout"] == 25
     assert captured["max_retries"] == 0
+
+
+def test_demo_score_calibration_rewards_relevant_content_but_caps_unrelated_text():
+    criterion = DemoAgentCriterion(
+        criterion_code="C5",
+        score_recommendation=3,
+        summary="Финансовый раздел требует уточнения.",
+        strengths=[],
+        issues=["Нужны детали."],
+        evidence=[],
+        confidence=0.6,
+    )
+    relevant = "Финансовая модель: затраты, выручка, инвестиции, себестоимость и окупаемость проекта."
+    assert StartupVkrAgentFlow._calibrate_demo_criterion(criterion, relevant).score_recommendation == 6
+
+    optimistic = criterion.model_copy(update={"score_recommendation": 8})
+    unrelated = "Обзор истории живописи и биография художника."
+    assert StartupVkrAgentFlow._calibrate_demo_criterion(optimistic, unrelated).score_recommendation == 3
+
+
+def test_demo_final_uses_specialist_consensus_instead_of_second_penalty():
+    names = [
+        ("C1", "Проблема и актуальность"),
+        ("C2", "Инновационность и продукт"),
+        ("C3", "Рынок и целевая аудитория"),
+        ("C4", "Бизнес-модель"),
+        ("C5", "Финансовая реализуемость"),
+        ("C6", "Риски и развитие"),
+    ]
+    report = DemoFinalReport(
+        overall_score=18,
+        criteria=[
+            {"code": code, "name": name, "score": 3, "comment": "Нужна доработка.", "strengths": [], "issues": []}
+            for code, name in names
+        ],
+        strengths=["Есть основа."],
+        remarks=["Нужны уточнения."],
+        recommendations=["Добавить конкретику."],
+        conclusion="Работу можно улучшить.",
+        spoken_summary="Работу можно улучшить.",
+        disclaimer="Предварительная оценка.",
+    )
+    package = [
+        {
+            "output": {
+                "criteria": [
+                    {"criterion_code": criterion.code, "score_recommendation": 7}
+                    for criterion in report.criteria
+                ]
+            }
+        }
+    ]
+    calibrated = StartupVkrAgentFlow._apply_demo_consensus(report, package)
+    assert calibrated.overall_score == 42
+    assert {item.score for item in calibrated.criteria} == {7}
 
 
 def docx_bytes(text: str) -> bytes:
@@ -387,7 +442,14 @@ async def test_startup_vkr_flow_cache_hit_does_not_call_llm_again():
 
 @pytest.mark.asyncio
 async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_report():
-    document = await seed_document("Резюме проекта. Проблема KYC. Архитектура DID Wallet Verifier. Экономика SAM NPV. Риски отказов.")
+    document = await seed_document(
+        "Проблема и актуальность подтверждают потребность клиента и цель проекта. "
+        "Продукт предлагает инновационное технологическое решение, MVP и прототип. "
+        "Рынок, целевая аудитория, клиентские сегменты, спрос и конкуренты описаны. "
+        "Бизнес-модель включает монетизацию, продажи, доход и каналы продвижения. "
+        "Финансовая модель содержит затраты, выручку, инвестиции, себестоимость и окупаемость. "
+        "Риски, результаты, этапы внедрения, дорожная карта, развитие и масштабирование раскрыты."
+    )
     llm = FakeStartupLLM()
     async with async_session_factory() as session:
         await ensure_startup_vkr_seed(session)
@@ -401,13 +463,13 @@ async def test_startup_vkr_demo_flow_keeps_agents_and_returns_short_scored_repor
             )
         ).scalar_one()
 
-    assert payload.overall_score == 47
+    assert payload.overall_score == 48
     assert stored_demo.analysis_id == "analysis-demo"
     assert stored_demo.document_id == document.id
     assert stored_demo.status == "completed"
     assert stored_demo.result_json["extra_blocks"]["assessment_id"] == pipeline.assessment_id
     assert payload.extra_blocks["mode"] == "demo"
-    assert payload.extra_blocks["demo_report"]["overall_score"] == 47
+    assert payload.extra_blocks["demo_report"]["overall_score"] == 48
     assert [call["model"] for call in llm.calls].count(WORKER) == 2
     assert [call["model"] for call in llm.calls].count(CRITIC) == 2
     assert [call["model"] for call in llm.calls].count(FINAL_EXPERT) == 1

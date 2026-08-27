@@ -78,6 +78,15 @@ DEMO_AGENT_CONFIG = {
     },
 }
 
+DEMO_CRITERION_TERMS = {
+    "C1": ("проблем", "актуаль", "потребност", "боль", "цель", "причин"),
+    "C2": ("продукт", "решени", "новизн", "инновац", "технолог", "mvp", "прототип"),
+    "C3": ("рынок", "аудитор", "клиент", "сегмент", "конкурент", "спрос", "sam", "tam"),
+    "C4": ("бизнес", "монетизац", "продаж", "доход", "ценност", "канал", "партнер"),
+    "C5": ("финанс", "затрат", "выруч", "инвестиц", "окупаем", "себестоим", "npv", "irr"),
+    "C6": ("риск", "развити", "roadmap", "дорожн", "масштаб", "внедрен", "результат", "этап"),
+}
+
 
 class StartupVkrAgentFlow:
     def __init__(self, session: AsyncSession, llm_client: LLMClient | None = None):
@@ -318,7 +327,8 @@ class StartupVkrAgentFlow:
                     else item
                     for item in criterion.evidence
                 ]
-                sanitized_criteria.append(criterion.model_copy(update={"evidence": evidence}))
+                sanitized = criterion.model_copy(update={"evidence": evidence})
+                sanitized_criteria.append(self._calibrate_demo_criterion(sanitized, context))
             result.output = result.output.model_copy(update={"criteria": sanitized_criteria})
             return agent.code, result, elapsed_ms
 
@@ -483,6 +493,7 @@ class StartupVkrAgentFlow:
         try:
             started = time.monotonic()
             llm_result = await self._ask_demo(FINAL_EXPERT, system, user, DemoFinalReport, 0, 1800)
+            llm_result.output = self._apply_demo_consensus(llm_result.output, package)
             result = await self._save_agent_success(assessment.id, agent, task_run, llm_result, idempotency_key, analysis_id)
             result.latency_ms = int((time.monotonic() - started) * 1000)
             return result
@@ -675,6 +686,39 @@ class StartupVkrAgentFlow:
             if result.agent_code == agent_code:
                 return result.latency_ms
         return 0
+
+    @staticmethod
+    def _calibrate_demo_criterion(criterion, context: str):
+        normalized = " ".join(context.lower().split())
+        matches = sum(1 for term in DEMO_CRITERION_TERMS[criterion.criterion_code] if term in normalized)
+        score = criterion.score_recommendation
+        if matches == 0:
+            score = min(score, 3)
+        elif matches == 1:
+            score = min(score, 4)
+        elif matches >= 4:
+            score = max(score, 6)
+        else:
+            score = max(score, 5)
+        if matches >= 6 and any(item.quote for item in criterion.evidence):
+            score = max(score, 7)
+        return criterion.model_copy(update={"score_recommendation": score})
+
+    @staticmethod
+    def _apply_demo_consensus(report: DemoFinalReport, package: list[dict]) -> DemoFinalReport:
+        scores: dict[str, list[int]] = {code: [] for code in DEMO_CRITERION_TERMS}
+        for item in package:
+            for criterion in (item.get("output") or {}).get("criteria") or []:
+                code = criterion.get("criterion_code")
+                if code in scores:
+                    scores[code].append(int(criterion.get("score_recommendation", 0)))
+        payload = report.model_dump(mode="json")
+        for criterion in payload["criteria"]:
+            candidates = scores.get(criterion["code"]) or []
+            if candidates:
+                criterion["score"] = round(sum(candidates) / len(candidates))
+        payload["overall_score"] = sum(item["score"] for item in payload["criteria"])
+        return DemoFinalReport.model_validate(payload)
 
     @staticmethod
     def _truncate_to_sentence(text: str, max_chars: int) -> str:
