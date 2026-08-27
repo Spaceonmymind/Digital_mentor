@@ -54,7 +54,8 @@ class LLMClient:
         except ImportError as exc:
             raise LLMConfigurationError("OpenAI SDK is not installed") from exc
 
-        self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout)
+        # Retries are handled explicitly below so the SDK must not multiply them internally.
+        self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url, timeout=self.timeout, max_retries=0)
 
     async def ask(
         self,

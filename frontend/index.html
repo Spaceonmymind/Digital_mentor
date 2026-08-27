@@ -54,6 +54,10 @@
               <span data-icon="maximize"></span>
               Режим презентации
             </button>
+            <button class="button button--secondary" type="button" id="historyButton">
+              <span data-icon="history"></span>
+              История анализов
+            </button>
             <button class="icon-button" type="button" id="soundToggle" aria-label="Переключить звук">
               <span data-icon="volume2"></span>
             </button>
@@ -166,30 +170,57 @@
               </div>
 
               <div class="workspace-stage" id="processingStage">
-                <section class="card">
-                  <div class="section-heading">
-                    <span data-icon="scan-search"></span>
+                <section class="card processing-console">
+                  <div class="processing-console__top">
                     <div>
-                      <h2>Идет анализ работы</h2>
-                      <p>Ментор последовательно проверяет структуру, содержание, стиль и признаки генеративного ИИ.</p>
-                    </div>
-                  </div>
-                  <div class="analysis-headline">
-                    <div>
-                      <span>Документ</span>
-                      <strong id="processingFileName">Работа</strong>
-                    </div>
-                    <div>
-                      <span>Общий прогресс</span>
-                      <strong id="processingPercent">0%</strong>
+                      <p class="eyebrow">AI-анализ</p>
+                      <h2>Агенты читают работу</h2>
+                      <p id="processingPhase">Подготовка документа</p>
                     </div>
                     <button class="button button--ghost" type="button" id="cancelAnalysisButton">
                       <span data-icon="circle-stop"></span>
-                      Отменить анализ
+                      Отменить
                     </button>
                   </div>
-                  <div class="progress progress--wide"><span id="overallProgressBar" style="width: 0%"></span></div>
-                  <div class="analysis-steps" id="analysisSteps"></div>
+
+                  <div class="processing-showcase">
+                    <div class="mentor-scanner">
+                      <div class="scanner-orbit" aria-hidden="true">
+                        <div class="scanner-ring scanner-ring--outer"></div>
+                        <div class="scanner-ring scanner-ring--middle"></div>
+                        <div class="scanner-ring scanner-ring--inner"></div>
+                        <div class="scanner-sweep"></div>
+                        <div class="scanner-core">
+                          <span id="processingPercent">0%</span>
+                          <small id="processingElapsed">Прошло: 00:00</small>
+                        </div>
+                        <span class="scanner-node scanner-node--a15">Проблема</span>
+                        <span class="scanner-node scanner-node--a16">Экономика</span>
+                        <span class="scanner-node scanner-node--a17">Архитектура</span>
+                        <span class="scanner-node scanner-node--a28">Риски</span>
+                        <span class="scanner-node scanner-node--a01">Итог</span>
+                      </div>
+                      <div class="scanner-caption">
+                        <strong>Мультиагентный проход</strong>
+                        <span>Несколько независимых проверок идут одновременно, затем ментор собирает понятный итог.</span>
+                      </div>
+                    </div>
+
+                    <div class="processing-readout">
+                      <div class="analysis-headline">
+                        <div>
+                          <span>Документ</span>
+                          <strong id="processingFileName">Работа</strong>
+                        </div>
+                        <div>
+                          <span>Сейчас</span>
+                          <strong id="processingLiveStep">Запуск анализа</strong>
+                        </div>
+                      </div>
+                      <div class="progress progress--wide"><span id="overallProgressBar" style="width: 0%"></span></div>
+                      <div class="analysis-steps" id="analysisSteps"></div>
+                    </div>
+                  </div>
                 </section>
               </div>
 
@@ -230,23 +261,27 @@
                     <div>
                       <p class="eyebrow">Текущая стадия</p>
                       <strong>S?</strong>
+                      <div class="project-level"><small>Уровень проекта</small><b id="projectLevel">Требует доработки</b></div>
                       <span>Работа выполнена на хорошем уровне</span>
                     </div>
-                    <div class="score-ring">87</div>
+                    <div class="score-overview">
+                      <div class="score-ring">87</div>
+                      <div class="criteria-score-summary" id="criteriaScoreSummary"></div>
+                    </div>
                   </section>
 
                   <section class="card criteria-card" id="resultCriteria">
-                    <h2>Путь работы по стадиям</h2>
+                    <h2>📈 Оценки по критериям</h2>
                     <div id="criteriaList"></div>
                   </section>
 
-                  <section class="card list-card">
-                    <h2>Что устояло</h2>
+                  <section class="card list-card list-card--strengths">
+                    <h2>💪 Сильные стороны</h2>
                     <ul id="strengthsList"></ul>
                   </section>
 
-                  <section class="card list-card">
-                    <h2>Главные возражения</h2>
+                  <section class="card list-card list-card--issues">
+                    <h2>Что требует доработки</h2>
                     <ul id="improvementsList"></ul>
                   </section>
                 </div>
@@ -267,36 +302,18 @@
                   </div>
                 </section>
 
-                <section class="card ai-risk-card">
-                  <div class="section-heading">
-                    <span data-icon="sparkles"></span>
-                    <div>
-                      <h2>Один вопрос и следующий шаг</h2>
-                    </div>
-                  </div>
-                  <ul id="aiRiskList"></ul>
-                  <p class="disclaimer">Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.</p>
-                </section>
-
                 <section class="recommendation-section" id="resultRecommendations">
                   <div class="section-heading">
                     <span data-icon="route"></span>
                     <div>
-                      <h2>Следующий шаг</h2>
+                      <h2>🛠 Что делать дальше</h2>
                     </div>
+                  </div>
+                  <div class="recommendation-progress">
+                    <div><strong>Прогресс доработки</strong><span id="recommendationProgressText">0 рекомендаций запланировано</span></div>
+                    <div class="progress"><span id="recommendationProgressBar" style="width: 0%"></span></div>
                   </div>
                   <div class="recommendation-grid" id="recommendationPlan"></div>
-                </section>
-
-                <section class="card directions-card">
-                  <div class="section-heading">
-                    <span data-icon="compass"></span>
-                    <div>
-                      <h2>Как вы хотите улучшить работу?</h2>
-                    </div>
-                  </div>
-                  <div class="direction-buttons" id="directionButtons"></div>
-                  <div class="direction-result" id="directionResult">Выберите направление улучшения.</div>
                 </section>
 
                 <section class="card chat-card" id="resultChat">
@@ -323,30 +340,87 @@
                     </button>
                   </form>
                 </section>
-                <section class="card report-card">
+
+                <section class="card directions-card">
                   <div class="section-heading">
-                    <span data-icon="download"></span>
+                    <span data-icon="compass"></span>
                     <div>
-                      <h2>Итоговый отчет</h2>
+                      <h2>Как вы хотите улучшить работу?</h2>
                     </div>
                   </div>
-                  <button class="button" type="button" id="reportButton">
-                    <span data-icon="download"></span>
-                    Скачать отчет
-                  </button>
-                  <button class="button button--secondary" type="button" id="finishDemoButton">
-                    <span data-icon="check-circle-2"></span>
-                    Завершить
-                  </button>
+                  <div class="direction-buttons" id="directionButtons"></div>
+                  <div class="direction-result" id="directionResult">Выберите направление улучшения.</div>
+                </section>
+
+                <section class="card report-card detailed-report-card">
+                  <div class="detailed-report-hero">
+                    <div>
+                      <p class="eyebrow">Подробный разбор</p>
+                      <h2>Большой отчет собирается отдельно</h2>
+                      <p id="detailedReportStatusText">После быстрого результата ментор готовит подробный PDF с примерами из текста, доказательствами и планом доработки.</p>
+                    </div>
+                    <div class="report-orb" aria-hidden="true">
+                      <span data-icon="file-text"></span>
+                    </div>
+                  </div>
+
+                  <div class="report-flow" id="detailedReportFlow">
+                    <div class="report-flow__item is-active">
+                      <span data-icon="search-check"></span>
+                      <strong>Цитаты</strong>
+                      <small>ищем фрагменты</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="layers-3"></span>
+                      <strong>Разбор</strong>
+                      <small>структурируем выводы</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="chart-no-axes-column"></span>
+                      <strong>Рекомендации</strong>
+                      <small>собираем план</small>
+                    </div>
+                    <div class="report-flow__item">
+                      <span data-icon="file-down"></span>
+                      <strong>PDF</strong>
+                      <small>готовим файл</small>
+                    </div>
+                  </div>
+
+                  <div class="report-card__actions">
+                    <button class="button button--secondary" type="button" id="metricsButton">
+                      <span data-icon="activity"></span>
+                      Метрики анализа
+                    </button>
+                    <button class="button button--large" type="button" id="reportButton">
+                      <span data-icon="download"></span>
+                      Скачать подробный отчет
+                    </button>
+                    <button class="button button--secondary" type="button" id="finishDemoButton">
+                      <span data-icon="check-circle-2"></span>
+                      Завершить
+                    </button>
+                  </div>
                 </section>
                 <section class="card history-card">
                   <div class="section-heading">
                     <span data-icon="history"></span>
                     <div>
-                      <h2>История текущей сессии</h2>
+                      <h2>История анализов</h2>
                     </div>
                   </div>
                   <div class="history-list" id="historyList"></div>
+                </section>
+
+                <section class="card ai-risk-card">
+                  <div class="section-heading">
+                    <span data-icon="sparkles"></span>
+                    <div>
+                      <h2>Один вопрос и следующий шаг</h2>
+                    </div>
+                  </div>
+                  <ul id="aiRiskList"></ul>
+                  <p class="disclaimer">Разбор не является подписью человека и не заменяет решение научного руководителя или экспертного совета.</p>
                 </section>
               </div>
 
@@ -383,11 +457,80 @@
         </section>
 
         <section class="page" id="aboutPage">
-          <section class="card empty-page">
-            <span data-icon="info"></span>
-            <h2>О проекте</h2>
-            <p>Цифровой ментор помогает автору увидеть сильные стороны работы, замечания, рекомендации и направления дальнейшего развития.</p>
-          </section>
+          <div class="about-shell">
+            <section class="about-hero">
+              <div class="about-hero__copy">
+                <p class="about-kicker"><span></span> Мультиагентная экспертная система</p>
+                <h2>Не один чат-бот.<br /><em>Цифровой консилиум</em> для проектных работ.</h2>
+                <p class="about-lead">Digital Mentor разбирает ВКР и проектные документы как команда независимых экспертов: каждый смотрит на свою часть работы, спорит с допущениями и передает выводы финальному ментору. Пользователь получает не сырой ответ нейросети, а собранную позицию с оценками, возражениями и следующим шагом.</p>
+                <div class="about-hero__badges">
+                  <span><span data-icon="shield-check"></span> Доказательно</span>
+                  <span><span data-icon="users"></span> Независимые роли</span>
+                  <span><span data-icon="messages-square"></span> Один понятный голос</span>
+                </div>
+              </div>
+              <div class="about-orbit" aria-label="Схема мультиагентного анализа">
+                <div class="about-orbit__ring"></div>
+                <div class="about-orbit__core"><strong>A-01</strong><span>Финальный<br />ментор</span></div>
+                <span class="about-orbit__agent about-orbit__agent--one">Проблема</span>
+                <span class="about-orbit__agent about-orbit__agent--two">Экономика</span>
+                <span class="about-orbit__agent about-orbit__agent--three">Архитектура</span>
+                <span class="about-orbit__agent about-orbit__agent--four">Риски</span>
+              </div>
+            </section>
+
+            <section class="about-metrics" aria-label="Цифры проекта">
+              <article><strong>9</strong><span>экспертных ролей<br />в методологии</span></article>
+              <article><strong>5</strong><span>агентов в быстром<br />demo-проходе</span></article>
+              <article><strong>3</strong><span>семейства моделей<br />с разными задачами</span></article>
+              <article><strong>1</strong><span>внешний голос<br />финального ментора</span></article>
+            </section>
+
+            <section class="about-section">
+              <div class="about-section__heading">
+                <div><p class="eyebrow">Как это работает</p><h3>От документа до решения</h3></div>
+                <p>Система не отправляет файл «как есть» одной модели. Текст извлекается локально, делится на смысловые блоки и проходит несколько специализированных проверок.</p>
+              </div>
+              <div class="about-pipeline">
+                <article><span class="about-step">01</span><div class="about-icon"><span data-icon="file-text"></span></div><h4>Документ</h4><p>PDF или DOCX проверяется, сохраняется и локально превращается в структурированный текст.</p></article>
+                <article><span class="about-step">02</span><div class="about-icon"><span data-icon="scan-search"></span></div><h4>Контекст</h4><p>Система выделяет проблему, решение, архитектуру, экономику, риски и заключение.</p></article>
+                <article><span class="about-step">03</span><div class="about-icon"><span data-icon="users"></span></div><h4>Независимый разбор</h4><p>Профильные агенты параллельно проверяют разные стороны проекта и ищут слабые допущения.</p></article>
+                <article><span class="about-step">04</span><div class="about-icon"><span data-icon="sparkles"></span></div><h4>Синтез</h4><p>Финальный ментор сопоставляет позиции агентов и формирует единый понятный вывод.</p></article>
+                <article><span class="about-step">05</span><div class="about-icon"><span data-icon="route"></span></div><h4>Действие</h4><p>Пользователь получает баллы, возражения, рекомендации, PDF и продолжает разбор в диалоге.</p></article>
+              </div>
+            </section>
+
+            <section class="about-section about-section--agents">
+              <div class="about-section__heading">
+                <div><p class="eyebrow">Команда анализа</p><h3>Каждый агент отвечает за свою оптику</h3></div>
+                <p>Роли не дублируют друг друга. Их задача — независимо проверить работу, а не согласиться с первым правдоподобным ответом.</p>
+              </div>
+              <div class="about-agents">
+                <article class="about-agent about-agent--lead"><span>Финальный синтез</span><h4>Энгельс · главный ментор</h4><p>Собирает конфликтующие выводы, выбирает главные возражения и говорит с пользователем от лица всей системы.</p><small>GPT · final expert</small></article>
+                <article class="about-agent"><span>Критический анализ</span><h4>Анти-Дюринг</h4><p>Проверяет проблему, решение, заявленные свойства и главное противоречие.</p><small>Mistral · быстрый аналитик</small></article>
+                <article class="about-agent"><span>Красная команда</span><h4>Экономический критик</h4><p>Ищет слабые финансовые допущения, проверяет модель выручки и пороги go/no-go.</p><small>Claude · критик</small></article>
+                <article class="about-agent"><span>Инженерная проверка</span><h4>Архитектор-скептик</h4><p>Разбирает компоненты, данные, реализуемость и отказные сценарии решения.</p><small>Mistral · аналитик</small></article>
+                <article class="about-agent"><span>Проверка внедрения</span><h4>Скептический клиент</h4><p>Смотрит на ограничения, злоупотребления, риски эксплуатации и реальную ценность.</p><small>Claude · критик</small></article>
+              </div>
+              <div class="about-full-team"><strong>Полный экспертный контур</strong><span>Механизм</span><span>Диагност</span><span>ТРИЗ-аналитик</span><span>Инвестор</span><p>В полном режиме к критикам подключаются последовательные worker-роли и методологические контрольные точки.</p></div>
+            </section>
+
+            <section class="about-models">
+              <div class="about-models__intro"><p class="eyebrow">Разделение ответственности</p><h3>Три модели — три класса задач</h3><p>Система использует Polza.ai как единый API-шлюз, но не назначает одну модель на всё. Это сохраняет специализацию и контролирует стоимость анализа.</p></div>
+              <div class="about-models__grid">
+                <article><span class="model-dot model-dot--mistral"></span><div><strong>Mistral</strong><small>Рабочий анализ</small></div><p>Читает индикаторы и быстро обрабатывает предметные блоки документа.</p></article>
+                <article><span class="model-dot model-dot--claude"></span><div><strong>Claude</strong><small>Критика и диалог</small></div><p>Оспаривает выводы, проверяет риски и отвечает на вопросы по сохраненному результату.</p></article>
+                <article><span class="model-dot model-dot--gpt"></span><div><strong>GPT</strong><small>Финальный эксперт</small></div><p>Используется точечно: превращает технический пакет агентов в единый отчет A-01.</p></article>
+              </div>
+            </section>
+
+            <section class="about-principles">
+              <article><span data-icon="shield-check"></span><h4>Источник — документ</h4><p>Агенты работают только с извлеченным контекстом и не должны исполнять инструкции из загруженного файла.</p></article>
+              <article><span data-icon="file-text"></span><h4>Воспроизводимость</h4><p>Методологии версионируются, результаты и вызовы сохраняются, старые версии не уничтожаются.</p></article>
+              <article><span data-icon="messages-square"></span><h4>Техника остается внутри</h4><p>Пользователь видит понятный вывод A-01, а модели, токены, стоимость и внутренние трассы остаются техническим слоем.</p></article>
+              <article><span data-icon="info"></span><h4>Ментор, не судья</h4><p>Система помогает усилить работу, но не заменяет научного руководителя, эксперта или решение комиссии.</p></article>
+            </section>
+          </div>
         </section>
       </main>
     </div>
@@ -395,30 +538,67 @@
     <div class="notification" id="notification" role="status" aria-live="polite"></div>
     <div class="modal-overlay" id="recommendationModal" hidden>
       <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="recommendationModalTitle">
-        <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
-          <span data-icon="x"></span>
-        </button>
-        <div class="modal-card__badge" id="recommendationModalPriority">1</div>
-        <p class="eyebrow">Рекомендация</p>
-        <h2 id="recommendationModalTitle">План доработки</h2>
-        <p id="recommendationModalDescription"></p>
-        <div class="modal-card__grid">
-          <div>
-            <span>Эффект</span>
-            <strong id="recommendationModalEffect"></strong>
+        <header class="recommendation-modal__header">
+          <button class="icon-button modal-close" type="button" id="recommendationModalClose" aria-label="Закрыть окно">
+            <span data-icon="x"></span>
+          </button>
+          <div class="modal-card__badge" id="recommendationModalPriority">1</div>
+          <p class="eyebrow">Рекомендация</p>
+          <h2 id="recommendationModalTitle">План доработки</h2>
+        </header>
+        <div class="recommendation-modal__content">
+          <p id="recommendationModalDescription"></p>
+          <div class="modal-card__grid">
+            <div><span>Эффект</span><strong id="recommendationModalEffect"></strong></div>
+            <div><span>Сложность</span><strong id="recommendationModalComplexity"></strong></div>
           </div>
-          <div>
-            <span>Сложность</span>
-            <strong id="recommendationModalComplexity"></strong>
+          <div class="modal-card__section">
+            <h3>Почему появилась рекомендация</h3>
+            <p id="recommendationModalWhy"></p>
           </div>
-        </div>
-        <div class="modal-card__section">
-          <h3>Что сделать</h3>
-          <p id="recommendationModalAction"></p>
+          <div class="modal-card__grid">
+            <div><span>Улучшает критерий</span><strong id="recommendationModalCriterion"></strong></div>
+            <div><span>Пример изменения</span><strong id="recommendationModalExample"></strong></div>
+          </div>
+          <div class="modal-card__section">
+            <h3>Что именно изменить</h3>
+            <p id="recommendationModalAction"></p>
+          </div>
         </div>
         <div class="modal-card__actions">
           <button class="button" type="button" id="recommendationModalAccept">Учту</button>
           <button class="button button--secondary" type="button" id="recommendationModalOk">Понятно</button>
+        </div>
+      </section>
+    </div>
+    <div class="modal-overlay" id="metricsModal" hidden>
+      <section class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="metricsModalTitle">
+        <button class="icon-button modal-close" type="button" id="metricsModalClose" aria-label="Закрыть метрики"><span data-icon="x"></span></button>
+        <p class="eyebrow">Техническая демонстрация</p>
+        <h2 id="metricsModalTitle">Метрики анализа</h2>
+        <div class="metrics-grid" id="metricsContent"></div>
+        <details class="metrics-agents"><summary>Вызовы по агентам</summary><div id="metricsAgents"></div></details>
+      </section>
+    </div>
+    <div class="modal-overlay" id="historyModal" hidden>
+      <section class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="historyModalTitle">
+        <button class="icon-button modal-close" type="button" id="historyModalClose" aria-label="Закрыть историю"><span data-icon="x"></span></button>
+        <p class="eyebrow">Сохраненные результаты</p>
+        <h2 id="historyModalTitle">История анализов</h2>
+        <p class="history-limitation">До появления авторизации история относится ко всему текущему развертыванию, а не к отдельному пользователю.</p>
+        <div class="history-list history-list--scroll" id="historyModalList"></div>
+      </section>
+    </div>
+    <div class="modal-overlay" id="documentModal" hidden>
+      <section class="modal-card document-viewer" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="documentModalTitle">
+        <button class="icon-button modal-close" type="button" id="documentModalClose" aria-label="Закрыть документ"><span data-icon="x"></span></button>
+        <p class="eyebrow">Связанный фрагмент</p>
+        <h2 id="documentModalTitle">Исходный документ</h2>
+        <p id="documentEvidenceNotice"></p>
+        <blockquote id="documentEvidenceQuote"></blockquote>
+        <div class="pdf-evidence-page" id="documentPage" hidden>
+          <img id="documentPageImage" alt="Страница исходного PDF" />
+          <span class="pdf-evidence-highlight" id="documentPageHighlight" aria-label="Связанный фрагмент"></span>
         </div>
       </section>
     </div>

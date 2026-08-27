@@ -1,18 +1,22 @@
+import asyncio
 import logging
 import mimetypes
 import zipfile
 import json
-from pathlib import PurePath
+from pathlib import Path, PurePath
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile
+from fastapi.responses import FileResponse, Response
+
+import fitz
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
 from app.db.models import Analysis, Document
-from app.db.session import get_session
+from app.db.session import async_session_factory, get_session
 from app.schemas.documents import DocumentContentResponse, DocumentResponse
 from app.services.extraction import TextExtractionService
 from app.services.security import StubFileSecurityService
@@ -32,8 +36,31 @@ def _document_response(document: Document) -> DocumentResponse:
         mime_type=document.mime_type,
         size=document.size,
         status=document.status,
+        extraction_status=document.extraction_status,
         created_at=document.created_at,
     )
+
+
+async def _extract_document_task(document_id: str, stored_path: Path, extension: str) -> None:
+    storage = DocumentStorage()
+    try:
+        extracted_path = storage.extracted_path(document_id)
+        await asyncio.to_thread(TextExtractionService().extract, document_id, stored_path, extension, extracted_path)
+        async with async_session_factory() as session:
+            document = await session.get(Document, document_id)
+            if document is None or document.deleted_at is not None:
+                return
+            document.extracted_path = str(extracted_path)
+            document.extraction_status = "completed"
+            await session.commit()
+        logger.info("document_extracted document_id=%s", document_id)
+    except Exception:
+        logger.exception("document_extraction_failed document_id=%s", document_id)
+        async with async_session_factory() as session:
+            document = await session.get(Document, document_id)
+            if document is not None:
+                document.extraction_status = "failed"
+                await session.commit()
 
 
 async def _validate_upload(upload: UploadFile) -> tuple[str, str, bytes]:
@@ -63,7 +90,11 @@ async def _validate_upload(upload: UploadFile) -> tuple[str, str, bytes]:
 
 
 @router.post("", response_model=DocumentResponse)
-async def upload_document(upload: UploadFile, session: AsyncSession = Depends(get_session)) -> DocumentResponse:
+async def upload_document(
+    upload: UploadFile,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+) -> DocumentResponse:
     original_name, extension, mime_type = await _validate_upload(upload)
     storage = DocumentStorage()
     stored = await storage.save(upload, extension)
@@ -85,6 +116,18 @@ async def upload_document(upload: UploadFile, session: AsyncSession = Depends(ge
             storage.delete(stored.stored_name)
             raise AppError("INVALID_DOCX_STRUCTURE", "Файл DOCX не является корректным ZIP-контейнером") from exc
 
+    if extension == ".pdf":
+        try:
+            with fitz.open(stored.path):
+                pass
+        except Exception as exc:
+            storage.delete(stored.stored_name)
+            raise AppError(
+                "DOCUMENT_CORRUPTED",
+                "PDF-документ поврежден или не может быть открыт",
+                status_code=422,
+            ) from exc
+
     scan_result = await StubFileSecurityService().scan(stored.path)
     document = Document(
         original_name=original_name,
@@ -100,20 +143,10 @@ async def upload_document(upload: UploadFile, session: AsyncSession = Depends(ge
     await session.commit()
     await session.refresh(document)
 
-    try:
-        extracted_path = storage.extracted_path(document.id)
-        TextExtractionService().extract(document.id, stored.path, extension, extracted_path)
-        document.extracted_path = str(extracted_path)
-        document.extraction_status = "completed"
-        await session.commit()
-        await session.refresh(document)
-    except AppError:
-        document.extraction_status = "failed"
-        await session.commit()
-        raise
+    background_tasks.add_task(_extract_document_task, document.id, stored.path, extension)
 
     logger.info(
-        "document_uploaded document_id=%s size=%s mime_type=%s scan_status=%s",
+        "document_uploaded document_id=%s size=%s mime_type=%s scan_status=%s extraction_status=pending",
         document.id,
         document.size,
         document.mime_type,
@@ -142,6 +175,51 @@ async def get_document_content(document_id: str, session: AsyncSession = Depends
     if not path.exists():
         raise AppError("DOCUMENT_TEXT_NOT_FOUND", "Извлеченный текст документа не найден", status_code=404)
     return DocumentContentResponse(document_id=document_id, content=json.loads(path.read_text(encoding="utf-8")))
+
+
+@router.get("/{document_id}/source")
+async def get_document_source(document_id: str, session: AsyncSession = Depends(get_session)) -> FileResponse:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    path = Path(document.storage_path)
+    if not path.exists():
+        raise AppError("DOCUMENT_FILE_NOT_FOUND", "Исходный файл документа не найден", status_code=404)
+    safe_name = PurePath(document.original_name).name
+    return FileResponse(
+        path,
+        media_type=document.mime_type,
+        filename=safe_name,
+        content_disposition_type="inline",
+    )
+
+
+@router.get("/{document_id}/pages/{page_number}/preview")
+async def get_document_page_preview(
+    document_id: str,
+    page_number: int,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    document = await session.get(Document, document_id)
+    if document is None or document.deleted_at is not None:
+        raise AppError("DOCUMENT_NOT_FOUND", "Документ не найден", status_code=404)
+    if document.mime_type != "application/pdf":
+        raise AppError("DOCUMENT_PREVIEW_UNSUPPORTED", "Постраничный просмотр доступен только для PDF", status_code=409)
+    path = Path(document.storage_path)
+    if not path.exists():
+        raise AppError("DOCUMENT_FILE_NOT_FOUND", "Исходный файл документа не найден", status_code=404)
+    try:
+        with fitz.open(path) as pdf:
+            if page_number < 1 or page_number > pdf.page_count:
+                raise AppError("DOCUMENT_PAGE_NOT_FOUND", "Страница документа не найдена", status_code=404)
+            page = pdf.load_page(page_number - 1)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(1.6, 1.6), alpha=False)
+            payload = pixmap.tobytes("png")
+    except AppError:
+        raise
+    except Exception as exc:
+        raise AppError("DOCUMENT_PREVIEW_FAILED", "Не удалось подготовить страницу документа", status_code=500) from exc
+    return Response(content=payload, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.delete("/{document_id}", response_model=DocumentResponse)
