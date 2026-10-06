@@ -374,11 +374,11 @@ async def test_internal_methodologies_endpoint_creates_and_lists_methodologies(c
 
 
 @pytest.mark.asyncio
-async def test_artifact_resolver_uses_simple_filename_rules():
+async def test_artifact_resolver_requires_explicit_work_type():
     resolver = ArtifactResolver()
 
-    assert await resolver.resolve(None, "startup-vkr.pdf", {}) == "STARTUP_VKR"
-    assert await resolver.resolve(None, "работа-стартап.docx", {}) == "STARTUP_VKR"
+    assert await resolver.resolve(None, "startup-vkr.pdf", {}) == "UNIVERSAL_DOCUMENT"
+    assert await resolver.resolve(None, "работа-стартап.docx", {}) == "UNIVERSAL_DOCUMENT"
     assert await resolver.resolve(None, "ordinary-document.pdf", {}) == "UNIVERSAL_DOCUMENT"
     assert await resolver.resolve("startup_vkr", "ordinary-document.pdf", {}) == "STARTUP_VKR"
 

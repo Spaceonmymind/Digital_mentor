@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisEvent, AnalysisResult, DetailedReport, Document, LLMCall
 from app.execution.models import AgentResult, MentorAnalysisResult
+from app.methodology.registry import MethodologyRegistry, WORK_TYPE_BY_CODE
+from app.methodology.repository import MethodologyRepository
 from app.db.session import get_session
 from app.schemas.analyses import (
     AnalysisCreateRequest,
@@ -67,6 +69,11 @@ def _status_response(analysis: Analysis, message: str | None = None) -> Analysis
         message=message,
         error_message=analysis.error_message,
         mode=analysis.mode,
+        work_type=analysis.work_type,
+        methodology_id=analysis.methodology_id,
+        methodology_version=analysis.methodology_version,
+        methodology_name=analysis.methodology_name,
+        methodology_max_score=analysis.methodology_max_score,
     )
 
 
@@ -82,12 +89,38 @@ async def create_analysis(
     if document.extraction_status != "completed":
         raise AppError("DOCUMENT_NOT_READY", "Текст документа еще не извлечен", status_code=409)
 
+    methodology_id = payload.methodology_id or "mentor-default"
+    methodology_version = payload.methodology_version or "draft"
+    methodology_name = None
+    methodology_max_score = None
+    work_type = payload.work_type.strip().upper() if payload.work_type else None
+    if work_type:
+        methodology = await MethodologyRegistry(MethodologyRepository(session)).resolve(
+            work_type,
+            methodology_version=payload.methodology_version,
+            additional_parameters=payload.additional_parameters,
+        )
+        if payload.methodology_id and payload.methodology_id != methodology.code:
+            raise AppError(
+                "METHODOLOGY_SELECTION_MISMATCH",
+                "Выбранная методология не соответствует типу работы",
+                status_code=409,
+            )
+        methodology_id = methodology.code
+        methodology_version = methodology.version
+        methodology_name = methodology.name
+        methodology_max_score = methodology.max_score
+
     analysis = Analysis(
         document_id=payload.document_id,
         analysis_type=payload.analysis_type,
         mode=payload.mode,
-        methodology_id=payload.methodology_id,
-        methodology_version=payload.methodology_version,
+        work_type=work_type,
+        methodology_id=methodology_id,
+        methodology_version=methodology_version,
+        methodology_name=methodology_name,
+        methodology_max_score=methodology_max_score,
+        methodology_parameters=payload.additional_parameters or {},
         status="queued",
         progress=0,
         current_step="queued",
@@ -98,7 +131,13 @@ async def create_analysis(
 
     logger.info("analysis_created analysis_id=%s document_id=%s", analysis.id, document.id)
     background_tasks.add_task(run_analysis_task, analysis.id)
-    return AnalysisCreateResponse(analysis_id=analysis.id, status=analysis.status)
+    return AnalysisCreateResponse(
+        analysis_id=analysis.id,
+        status=analysis.status,
+        work_type=analysis.work_type,
+        methodology_id=analysis.methodology_id,
+        methodology_version=analysis.methodology_version,
+    )
 
 
 @router.get("/history", response_model=AnalysisHistoryResponse)
@@ -142,11 +181,18 @@ async def get_analysis_history(
                 document_name=document.original_name,
                 mime_type=document.mime_type,
                 status=analysis.status,
+                work_type=analysis.work_type,
+                work_type_display_name=(
+                    WORK_TYPE_BY_CODE[analysis.work_type].display_name
+                    if analysis.work_type in WORK_TYPE_BY_CODE
+                    else None
+                ),
                 methodology_id=analysis.methodology_id,
+                methodology_name=analysis.methodology_name,
                 methodology_version=analysis.methodology_version,
                 mode=analysis.mode,
                 overall_score=payload.get("overall_score"),
-                total_score_max=extra.get("total_score_max", 60 if analysis.methodology_id == "STARTUP_VKR" else 100),
+                total_score_max=extra.get("total_score_max", analysis.methodology_max_score),
                 report_url=report.report_url if report and report.status == "completed" else None,
                 created_at=analysis.created_at,
                 completed_at=analysis.completed_at,
@@ -244,7 +290,7 @@ def _locate_evidence(payload: dict, quote: str | None, section: str | None) -> t
     return None, None, None, "page_only"
 
 
-_EVIDENCE_TERMS = {
+_STARTUP_VKR_EVIDENCE_TERMS = {
     "C1": ("проблем", "актуаль", "потребност", "цель"),
     "C2": ("продукт", "решени", "инновац", "новизн", "mvp", "технолог"),
     "C3": ("рынок", "аудитор", "клиент", "сегмент", "конкурент"),
@@ -255,7 +301,7 @@ _EVIDENCE_TERMS = {
 
 
 def _fallback_pdf_evidence(payload: dict, criterion_code: str) -> tuple[int | None, int | None, list[float] | None, str | None]:
-    terms = _EVIDENCE_TERMS.get(criterion_code, ())
+    terms = _STARTUP_VKR_EVIDENCE_TERMS.get(criterion_code, ())
     candidates = []
     for page in payload.get("pages") or []:
         for block in page.get("blocks") or []:
@@ -307,7 +353,15 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
     seen: set[tuple] = set()
     located_criteria: set[str] = set()
     for agent_result in agent_results:
-        for criterion in agent_result.output_json.get("criteria") or []:
+        criterion_payloads = list(agent_result.output_json.get("criteria") or [])
+        for rule in agent_result.output_json.get("rule_results") or []:
+            criterion_payloads.append(
+                {
+                    "criterion_code": rule.get("criterion_code"),
+                    "evidence": rule.get("evidence") or [],
+                }
+            )
+        for criterion in criterion_payloads:
             for evidence in criterion.get("evidence") or []:
                 quote = evidence.get("quote")
                 section = evidence.get("section")
@@ -349,8 +403,8 @@ async def get_analysis_evidence(analysis_id: str, session: AsyncSession = Depend
                 )
                 if page and criterion.get("criterion_code"):
                     located_criteria.add(criterion.get("criterion_code"))
-    if source_type == "pdf":
-        for criterion_code in _EVIDENCE_TERMS:
+    if source_type == "pdf" and analysis.methodology_id == "STARTUP_VKR":
+        for criterion_code in _STARTUP_VKR_EVIDENCE_TERMS:
             if criterion_code in located_criteria:
                 continue
             page, block_index, bbox, quote = _fallback_pdf_evidence(extracted, criterion_code)

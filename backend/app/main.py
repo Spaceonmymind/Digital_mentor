@@ -21,6 +21,7 @@ from app.api.v1.internal_llm import router as internal_llm_router
 from app.api.v1.internal_methodology import router as internal_methodology_router
 from app.api.v1.internal_pipeline import router as internal_pipeline_router
 from app.api.v1.media import router as media_router
+from app.api.v1.methodologies import router as methodologies_router
 from app.api.v1.tts import router as tts_router
 from app.core.config import settings
 from app.core.errors import AppError, app_error_handler
@@ -111,6 +112,7 @@ app.include_router(chat_router)
 app.include_router(tts_router)
 app.include_router(media_router)
 app.include_router(config_router)
+app.include_router(methodologies_router)
 app.include_router(internal_execution_router)
 app.include_router(internal_gates_router)
 app.include_router(internal_llm_router)

@@ -979,6 +979,42 @@ button {
   margin-top: 42px;
 }
 
+.work-type-field {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--border-light);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.work-type-field label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.work-type-field select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 44px 0 14px;
+  border: 1px solid #b9cecf;
+  border-radius: 12px;
+  color: var(--text-main);
+  background: #fff;
+  font: inherit;
+}
+
+.work-type-field p {
+  margin: 9px 0 0;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.work-type-field.is-unavailable p {
+  color: #8a5a14;
+}
+
 .drop-area {
   position: relative;
   min-height: 320px;
@@ -5150,4 +5186,35 @@ body.is-modal-open {
 
 #recommendationModal .modal-card__actions {
   margin-top: 18px;
+}
+.candidate-checks__columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.candidate-checks__columns > div {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(238, 246, 247, 0.72);
+}
+
+.candidate-checks__columns li,
+.candidate-checks__disclaimer {
+  color: var(--text-secondary);
+}
+
+.criteria-score-summary .is-not-checked {
+  opacity: 0.7;
+}
+
+.candidate-checks__rules { margin-top: 20px; }
+.candidate-checks__rules summary { cursor: pointer; font-weight: 700; }
+.candidate-rule { margin-top: 10px; padding: 14px 16px; border-left: 4px solid var(--green-dark); background: rgba(255, 255, 255, 0.72); }
+.candidate-rule > span { display: block; margin-top: 4px; color: var(--text-secondary); }
+.candidate-rule.is-not-checked { border-left-color: #9aa9ad; background: #f4f7f8; }
+.candidate-rule.is-not-checked > span { color: #65777c; }
+
+@media (max-width: 760px) {
+  .candidate-checks__columns { grid-template-columns: 1fr; }
 }

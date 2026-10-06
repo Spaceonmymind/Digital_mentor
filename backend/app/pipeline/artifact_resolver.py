@@ -4,6 +4,15 @@ from app.core.errors import AppError
 SUPPORTED_ARTIFACT_TYPES = {
     "UNIVERSAL_DOCUMENT",
     "STARTUP_VKR",
+    "CANDIDATE_DISSERTATION",
+    "SCIENTIFIC_ARTICLE",
+    "BACHELOR_SPECIALIST_THESIS",
+    "MASTER_THESIS",
+    "COURSE_WORK",
+    "PRACTICE_REPORT",
+    "RESEARCH_REPORT",
+    "DOCTORAL_DISSERTATION",
+    "DISSERTATION_ABSTRACT",
 }
 
 
@@ -25,7 +34,6 @@ class ArtifactResolver:
                 )
             return normalized
 
-        source = f"{filename} {' '.join(str(value) for value in metadata.values())}".lower()
-        if any(marker in source for marker in ("startup", "вкр", "стартап")):
-            return "STARTUP_VKR"
+        # Methodology selection must be explicit; filenames and document text
+        # are not a reliable or user-visible work type selection mechanism.
         return "UNIVERSAL_DOCUMENT"

@@ -130,6 +130,12 @@
                     </div>
                   </div>
 
+                  <div class="work-type-field">
+                    <label for="workTypeSelect">Тип работы</label>
+                    <select id="workTypeSelect" aria-describedby="workTypeDescription"></select>
+                    <p id="workTypeDescription">Загружаю каталог методологий…</p>
+                  </div>
+
                   <div class="drop-area">
                     <input id="fileInput" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                     <div class="drop-area__icon"><span data-icon="upload-cloud"></span></div>
@@ -273,6 +279,29 @@
                   <section class="card criteria-card" id="resultCriteria">
                     <h2>📈 Оценки по критериям</h2>
                     <div id="criteriaList"></div>
+                  </section>
+
+                  <section class="card candidate-checks" id="candidateChecks" hidden>
+                    <h2 id="ruleBasedReportTitle">Полнота автоматической проверки</h2>
+                    <p id="ruleBasedMethodology"></p>
+                    <p id="candidateCoverage"></p>
+                    <div id="representedResult" hidden>
+                      <h3 id="representedResultTitle">Результат, представленный в работе</h3>
+                      <p id="representedResultText"></p>
+                    </div>
+                    <div class="candidate-checks__columns">
+                      <div><h3>Что удалось проверить</h3><ul id="candidateCheckedList"></ul></div>
+                      <div><h3>Что не проверялось автоматически</h3><ul id="candidateNotCheckedList"></ul></div>
+                    </div>
+                    <details class="candidate-checks__rules">
+                      <summary>Проверяемые параметры и результаты</summary>
+                      <div id="candidateRuleList"></div>
+                    </details>
+                    <div id="methodologyLimitations" hidden>
+                      <h3>В рамках данного анализа не выполняются</h3>
+                      <ul id="methodologyLimitationsList"></ul>
+                    </div>
+                    <p class="candidate-checks__disclaimer" id="candidateDisclaimer"></p>
                   </section>
 
                   <section class="card list-card list-card--strengths">

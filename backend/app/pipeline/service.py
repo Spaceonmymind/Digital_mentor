@@ -22,7 +22,7 @@ class PipelineService:
             filename=payload.filename,
             metadata=payload.metadata,
         )
-        methodology = await self.methodology_resolver.resolve(artifact_type)
+        methodology = await self.methodology_resolver.resolve(artifact_type, payload.methodology_version)
         assessment = await self.assessment_repository.create_assessment(
             artifact_type=artifact_type,
             artifact_id=payload.artifact_id,
@@ -32,6 +32,7 @@ class PipelineService:
         return PipelineBuildResponse(
             assessment_id=plan.assessment_id,
             methodology=methodology.code,
+            methodology_version=methodology.version,
             tasks_count=len(plan.tasks),
             tasks=plan.tasks,
         )

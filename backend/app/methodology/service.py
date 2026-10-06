@@ -14,13 +14,22 @@ class MethodologyService:
     def __init__(self, repository: MethodologyRepository):
         self.repository = repository
 
-    async def create_methodology(self, code: str, name: str, version: str, description: str | None, is_active: bool):
+    async def create_methodology(
+        self,
+        code: str,
+        name: str,
+        version: str,
+        description: str | None,
+        is_active: bool,
+        **metadata,
+    ):
         return await self.repository.create(
             code=code,
             name=name,
             version=version,
             description=description,
             is_active=is_active,
+            **metadata,
         )
 
     async def list_methodologies(self) -> list[MethodologyResponse]:
@@ -45,6 +54,7 @@ class MethodologyService:
                     weight=indicator.weight,
                     order_index=indicator.order_index,
                     required=indicator.required,
+                    configuration=indicator.configuration,
                     is_demo=indicator.is_demo,
                     source=indicator.source,
                     version=indicator.version,
@@ -58,6 +68,9 @@ class MethodologyService:
                     title=criterion.title,
                     description=criterion.description,
                     weight=criterion.weight,
+                    max_score=criterion.max_score,
+                    required=criterion.required,
+                    configuration=criterion.configuration,
                     order_index=criterion.order_index,
                     is_demo=criterion.is_demo,
                     source=criterion.source,
@@ -74,6 +87,11 @@ class MethodologyService:
             is_active=methodology.is_active,
             is_demo=methodology.is_demo,
             source=methodology.source,
+            work_type_code=methodology.work_type_code,
+            status=methodology.status,
+            max_score=methodology.max_score,
+            applicable_formats=methodology.applicable_formats,
+            configuration=methodology.configuration,
             created_at=methodology.created_at,
             criteria=criteria,
             prompts=[prompt for prompt in sorted(methodology.prompts, key=lambda item: (item.stage, item.version, item.id))],

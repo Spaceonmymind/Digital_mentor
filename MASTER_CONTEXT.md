@@ -36,6 +36,10 @@ IMPLEMENTED:
 - `documents`, `analyses`, events/progress, cancel, result endpoints.
 - `UNIVERSAL_DOCUMENT` worker execution.
 - Активная `STARTUP_VKR` версии `2.0` по регламенту ВКР-стартапа Финансового университета; версия `1.1` Anti-Duhring сохранена для старых результатов.
+- Активная `CANDIDATE_DISSERTATION` версии `1.0` по методическим рекомендациям Финансового университета от 22.09.2025.
+- Активная `SCIENTIFIC_ARTICLE` версии `1.0`: внутренняя методология предварительного анализа научной статьи Digital Mentor, не являющаяся официальной методикой вуза, журнала или аттестационной системы.
+- Активная `GRADUATION_THESIS` версии `1.0` для типа «ВКР бакалавра / специалиста»: внутренняя методология Digital Mentor с 6 критериями, 42 правилами и шкалой 60 баллов.
+- Активная `MASTER_DISSERTATION` версии `1.0` для типа «Магистерская диссертация»: внутренняя методология Digital Mentor с 6 критериями, 50 правилами и шкалой 60 баллов.
 - Методологические сущности: methodology, criteria, indicators, prompt templates, methodology agents.
 - Assessment pipeline, plan builder, task runs, agent task runs, gates, agent results.
 - Polza.ai через OpenAI-compatible `LLMClient`.
@@ -325,12 +329,18 @@ Supported artifact types in `ArtifactResolver`:
 
 - `UNIVERSAL_DOCUMENT`
 - `STARTUP_VKR`
+- `CANDIDATE_DISSERTATION`
+- `SCIENTIFIC_ARTICLE`
+- `BACHELOR_SPECIALIST_THESIS`
+- `MASTER_THESIS`
 
 Resolution:
 
 - Explicit `artifact_type` is normalized and validated.
-- If not provided, filename/metadata containing `startup`, `вкр`, or `стартап` maps to `STARTUP_VKR`; otherwise `UNIVERSAL_DOCUMENT`.
-- `MethodologyResolver` returns active methodology by code via repository.
+- Filename and metadata are not used to guess the work type. If `artifact_type` is absent, the resolver uses `UNIVERSAL_DOCUMENT`.
+- The public frontend loads the work-type catalog and requires an explicit user selection before analysis.
+- `MethodologyRegistry` resolves the active methodology for a selected work type or an exact historical version.
+- `STARTUP_VKR` and `CANDIDATE_DISSERTATION` are configured and available; the other catalog entries return the controlled `METHODOLOGY_NOT_CONFIGURED` error until an active methodology is added.
 
 Versioning:
 
@@ -354,6 +364,33 @@ Current active startup methodology:
 - Six criteria C1-C6 cover problem/relevance, innovation/product, market/audience, business model, financial feasibility, and risks/development.
 - Regulation requirements are represented as internal indicators; weights remain nullable.
 - Versions `1.0` and `1.1` remain stored and readable but inactive for new assessments.
+
+Scientific Article 1.0:
+
+- Six criteria and a nominal internal scale of 60 points.
+- Uses the shared rule statuses, checked-applicable scoring, coverage and evidence validation.
+- Methodology-level limitations are stored separately from the 37 rule checks and do not affect scoring or coverage.
+- Verified absence uses `verification_basis` plus searched-context metadata; an unsupported absence claim becomes `NOT_CHECKED`.
+- Uses a separate `scientific_article` execution profile with SA-10—SA-50 in parallel followed by A-01 over a compact result package.
+- STARTUP_VKR 2.0 and CANDIDATE_DISSERTATION 1.0 retain their existing methodology semantics.
+
+Graduation Thesis 1.0:
+
+- Fourth active methodology; `source_type=INTERNAL_METHODOLOGY`, with no invented university regulations.
+- Six criteria, 42 rules and a nominal internal maximum of 60 points.
+- GT4 identifies only the result presented by the document as the author's result; it does not establish actual authorship.
+- An internal `RESEARCH/PROJECT/SOFTWARE/ANALYTICAL/MIXED` work-character hypothesis with confidence is used only for routing and conditional applicability, never directly for scoring.
+- Uses the reusable deterministic document preflight for headings, bibliography, references, scientific objects, applications and extraction diagnostics.
+- STARTUP_VKR 2.0, CANDIDATE_DISSERTATION 1.0 and SCIENTIFIC_ARTICLE 1.0 remain methodologically unchanged.
+
+Master Dissertation 1.0:
+
+- Fifth active methodology; `source_type=INTERNAL_METHODOLOGY`, with no invented university regulations.
+- Six criteria, 50 rules and a nominal internal maximum of 60 points.
+- Strengthens the research chain from problem and theoretical context through justified method, represented independent contribution, interpretation, limitations and conclusions.
+- Declared novelty is conditional and is analyzed only as a claim linked to evidence; absence of a novelty claim is not a failure and real novelty is not confirmed.
+- Reuses work-character only for routing/applicability, common deterministic preflight, evidence-first validation and compact A-01 synthesis.
+- The previous four active methodologies retain their existing methodology semantics.
 
 Universal document:
 
@@ -751,14 +788,15 @@ Backend `backend/app/services/stt.py` only defines protocol and `SttResult`; no 
 Main SQLAlchemy entities:
 
 - `Document`: uploaded file metadata, storage path, extraction path/status, soft delete.
-- `Analysis`: user-visible analysis job, mode, methodology fields, status/progress/current_step.
+- `Analysis`: user-visible analysis job, mode, selected work type, exact methodology snapshot, status/progress/current_step.
 - `AnalysisEvent`: progress/event stream rows for analysis.
 - `AnalysisResult`: one JSON result payload per analysis.
 - `DetailedReport`: async detailed PDF status, report id/url/progress.
 - `ChatMessage`: chat messages per analysis.
 - `LLMCall`: LLM tracing, model/provider/tokens/cost/latency/status and links.
-- `Methodology`: methodology code/version/source/demo/active.
-- `MethodologyCriterion`: criteria under methodology.
+- `WorkType`: stable catalog entry and configuration status for a type of academic work.
+- `Methodology`: versioned methodology linked to a work type, with status, formats, max score and execution configuration.
+- `MethodologyCriterion`: criteria under methodology, including per-criterion max score and configuration.
 - `MethodologyIndicator`: indicators under criteria.
 - `PromptTemplate`: DB prompts by methodology/stage/version.
 - `MethodologyAgent`: configured agents and model roles per methodology.
@@ -785,6 +823,11 @@ Current migrations:
 - `0008_add_analysis_mode` — `Analysis.mode`.
 - `0009_add_detailed_reports` — async detailed report table.
 - `0010_startup_vkr_regulation_2_0` — STARTUP_VKR 2.0 regulation methodology, criteria, indicators, prompts and agents.
+- `0011_add_work_type_registry` — work-type catalog, generic methodology metadata and exact analysis methodology snapshots; existing STARTUP_VKR history is backfilled without deleting old versions.
+- `0012_indicator_configuration` — universal rule metadata on methodology indicators and the active CANDIDATE_DISSERTATION 1.0 seed.
+- `0013_scientific_article_1_0` — active internal SCIENTIFIC_ARTICLE 1.0 methodology, 37 rules, limitations and dedicated agents.
+- `0014_graduation_thesis_1_0` — active internal GRADUATION_THESIS 1.0 methodology for `BACHELOR_SPECIALIST_THESIS`, 42 rules, limitations and GT agents.
+- `0015_master_dissertation_1_0` — active internal MASTER_DISSERTATION 1.0 methodology for `MASTER_THESIS`, 50 rules, limitations and MD agents.
 
 Startup applies migrations automatically in backend container.
 
@@ -813,6 +856,7 @@ Storage is mounted into backend container by docker compose:
 | GET | `/health/live` | liveness |
 | GET | `/health/ready` | readiness plus env/mode summary |
 | GET | `/api/v1/config` | public frontend config |
+| GET | `/api/v1/methodologies` | public work-type catalog and active methodology summaries (without internal prompts) |
 | POST | `/api/v1/documents` | upload and extract PDF/DOCX |
 | GET | `/api/v1/documents/{document_id}` | document metadata |
 | GET | `/api/v1/documents/{document_id}/content` | extracted content JSON |
@@ -1109,3 +1153,40 @@ LATER:
 - The demo report overview includes project readiness, six compact score indicators, richer criterion cards, and persistent per-analysis recommendation planning stored in browser localStorage. This planning progress does not affect AI scoring.
 - Generated PDF reports use branded page bands, section panels, and compact item cards while preserving the same saved report content.
 - No database migration, new LLM call, methodology/scoring change, model change, or TTS configuration change was required.
+
+## 36. Work type and methodology registry
+
+- The analysis entry point is now `WorkType -> MethodologyRegistry -> exact Methodology version -> configured execution profile`.
+- The stable catalog contains ten work types: startup thesis, course work, bachelor/specialist thesis, master thesis, practice report, research report, scientific article, candidate dissertation, doctoral dissertation, and dissertation abstract.
+- All ten catalog work types now have active methodologies. The five profiles added in migrations `0016`-`0020` use the same universal rule-based scoring, UI and report layer.
+- `GET /api/v1/methodologies` is the public selector API. It exposes display metadata, availability and a compact active-version summary, but not prompts or internal agent instructions.
+- `POST /api/v1/analyses` accepts the selected `work_type`, optional exact methodology id/version, and additional parameters. The resolved selection is persisted on `Analysis`, so history and reports do not silently switch to a newer methodology.
+- Existing analyses are preserved. Migration `0011` backfills unambiguous STARTUP_VKR records; ambiguous legacy records remain nullable rather than being guessed from filenames.
+- The generic methodology schema stores applicable formats, total and criterion max scores, required flags, extensible configuration, agent scopes and output contracts.
+- The current `startup_vkr` execution profile remains a specialized adapter over the existing multi-agent executor. It preserves A-15/A-16/A-17/A-28 and A-01, demo/full behavior, Polza.ai routing, prompts and old methodology versions.
+- Frontend score labels, history and report metadata use the selected methodology's stored max score instead of treating 60 and six criteria as global constants.
+- Adding a new methodology requires a versioned methodology record plus an execution profile supported by the core engine; it must not be implemented as another frontend hardcode.
+
+## 37. Candidate dissertation methodology 1.0
+
+- `CANDIDATE_DISSERTATION` 1.0 is the second active methodology. Its source is the FinUniversity document “Оформление текста рукописи диссертации и текста автореферата диссертации. Методические рекомендации”, dated 22.09.2025.
+- It uses seven criteria with a nominal internal Digital Mentor maximum of 70 points. This is explicitly preliminary and is not an official FinUniversity or dissertation-council score.
+- Methodology indicators act as rule-level checks. Their universal `configuration` stores capability, source document/section/pages, normative strength, applicability, evidence requirements and scoring weight.
+- Rule statuses are `PASS`, `PARTIAL`, `FAIL`, `NOT_APPLICABLE`, and `NOT_CHECKED`. The last two are excluded from the scoring denominator; `NOT_CHECKED` never becomes a zero or a failure.
+- The result also reports coverage separately from score and uses a dynamic evaluated maximum. A criterion with no checked applicable rule has `score=null`, `max_score=null`, and status `NOT_CHECKED`.
+- Formal PDF checks are limited to the text layer, page/block structure, bbox and page count. Font, size, spacing, margins, boldness, physical placement, binding and one-sided printing are not inferred from plain text and remain `NOT_CHECKED`.
+- DOCX extraction additionally records directly available run fonts/sizes/bold/italic, paragraph alignment/spacing, section margins/page size, tables/empty cells, styles and header/footer fields. It does not claim reliable DOCX pagination without rendering.
+- OCR is not part of this methodology; scanned PDFs without a text layer still return `DOCUMENT_TEXT_NOT_FOUND`.
+- The dedicated `candidate_dissertation` executor runs CD-10/CD-20/CD-30/CD-40/CD-50/CD-60 thematic analysis in parallel. A-01 receives only compact structured results, evidence, recommendations, coverage and limitations for final synthesis.
+- Candidate reports contain the preliminary-analysis disclaimer and detailed reports can show stored normative source references. STARTUP_VKR 2.0 prompts, models, scoring, payload and execution flow remain unchanged.
+
+## 38. Remaining academic catalog methodologies 1.0
+
+- `COURSE_PAPER` 1.0 (`COURSE_WORK`, profile `course_paper`) is an internal Digital Mentor methodology: 5 criteria, 35 rules, nominal maximum 50. It evaluates a course paper without requiring scientific novelty or a qualification-level independent result.
+- `INTERNSHIP_REPORT` 1.0 (`PRACTICE_REPORT`, profile `internship_report`) is an internal methodology: 5 criteria, 32 rules, nominal maximum 50. It focuses on the practice context, performed work and reported outcomes and does not confirm that the practice or work actually occurred.
+- `RESEARCH_REPORT` 1.0 (`RESEARCH_REPORT`, profile `research_report`) is an internal methodology: 6 criteria, 42 rules, nominal maximum 60. It evaluates the research programme, stages, methods, intermediate/final results and reproducibility of the report rather than treating it as a scientific article.
+- `DOCTORAL_DISSERTATION` 1.0 (profile `doctoral_dissertation`) uses mixed rule-level sources: 7 criteria, 56 rules, nominal maximum 70. General structural requirements supported by the FinUniversity dissertation guidelines are normative; assessment of the represented scientific problem, contribution and results is explicitly internal. It does not certify doctoral level, authorship, novelty, reliability or eligibility for a degree.
+- `DISSERTATION_ABSTRACT` 1.0 (profile `dissertation_abstract`) uses the dedicated author-abstract requirements in sections 3.1-3.3, pages 16-18 of the FinUniversity guidelines: 6 criteria, 43 rules, nominal maximum 60. It treats the abstract as its own compact document and does not claim correspondence with a dissertation that was not supplied.
+- Migrations `0016_course_paper_1_0` through `0020_dissertation_abstract_1_0` form a linear chain after `0015_master_dissertation_1_0`.
+- The shared `ConfiguredAcademicAgentFlow` only centralizes existing orchestration: independent thematic agents run in parallel, A-01 receives a compact structured package, contexts are methodology-specific and bounded, common preflight/evidence validation/scoring remain unchanged.
+- Optional represented-result blocks are configuration-driven: “Основной результат работы”, “Что выполнено в ходе практики”, “Основные результаты НИР”, “Научный вклад, заявленный в работе” and “Ключевые положения, представленные в автореферате”.

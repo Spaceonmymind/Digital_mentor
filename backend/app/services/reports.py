@@ -64,18 +64,29 @@ class ReportService:
     def _build_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
         mentor_report = (payload.get("extra_blocks") or {}).get("mentor_report")
         if mentor_report:
-            return self._build_mentor_report_lines(document, mentor_report)
+            return self._build_mentor_report_lines(analysis, document, mentor_report)
+        candidate_report = (payload.get("extra_blocks") or {}).get("rule_based_report") or (payload.get("extra_blocks") or {}).get("candidate_dissertation_report")
+        if analysis.methodology_id in {"SCIENTIFIC_ARTICLE", "GRADUATION_THESIS", "MASTER_DISSERTATION", "COURSE_PAPER", "INTERNSHIP_REPORT", "RESEARCH_REPORT", "DOCTORAL_DISSERTATION", "DISSERTATION_ABSTRACT"} and candidate_report:
+            return self._build_rule_based_report_lines(analysis, document, candidate_report, payload, detailed=False)
+        if analysis.methodology_id == "CANDIDATE_DISSERTATION" and candidate_report:
+            return self._build_candidate_report_lines(analysis, document, candidate_report, payload, detailed=False)
         demo_report = (payload.get("extra_blocks") or {}).get("demo_report")
         if demo_report:
-            return self._build_demo_report_lines(document, demo_report)
+            return self._build_demo_report_lines(analysis, document, demo_report, payload)
+
+        total_score_max = (payload.get("extra_blocks") or {}).get("total_score_max") or analysis.methodology_max_score
 
         lines = [
             "Цифровой ментор. Итоговый отчет",
             f"Файл: {document.original_name}",
             f"Дата анализа: {analysis.completed_at or analysis.created_at}",
             f"ID анализа: {analysis.id}",
-            f"Методология: {(payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {(payload.get('methodology') or {}).get('methodology_version', analysis.methodology_version)}",
-            f"Общий балл: {payload.get('overall_score')} / 100" if payload.get("overall_score") else "Общий балл: не рассчитывался",
+            f"Методология: {analysis.methodology_name or (payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {analysis.methodology_version}",
+            (
+                f"Общий балл: {payload.get('overall_score')} / {total_score_max}"
+                if payload.get("overall_score") is not None and total_score_max is not None
+                else "Общий балл: не рассчитывался"
+            ),
             f"Заключение: {payload.get('verdict')}",
             "",
             "Оценки по критериям:",
@@ -121,7 +132,7 @@ class ReportService:
             lines.append("Отметка: отчет сформирован в демонстрационном режиме MockAnalysisEngine.")
         return lines
 
-    def _build_mentor_report_lines(self, document: Document, report: dict) -> list[str]:
+    def _build_mentor_report_lines(self, analysis: Analysis, document: Document, report: dict) -> list[str]:
         header = report.get("header") or {}
         veto = report.get("veto") or {}
         question = report.get("one_question") or {}
@@ -134,7 +145,7 @@ class ReportService:
             f"Тип: {header.get('work_type') or 'ВКР как стартап'}",
             f"Дата: {header.get('analysis_date') or ''}",
             f"Версия работы: {header.get('work_version') or 'не указана'}",
-            f"Методология: {header.get('methodology') or ''}",
+            f"Методология: {header.get('methodology') or analysis.methodology_name or analysis.methodology_id} {analysis.methodology_version}",
             f"Текущая стадия работы: {header.get('current_stage') or ''}",
             "",
             "1. Что это за работа:",
@@ -189,18 +200,22 @@ class ReportService:
         lines.extend(["", "Отметка об использовании AI: разбор сформирован цифровым ментором и требует человеческой проверки."])
         return lines
 
-    def _build_demo_report_lines(self, document: Document, report: dict) -> list[str]:
+    def _build_demo_report_lines(self, analysis: Analysis, document: Document, report: dict, payload: dict) -> list[str]:
+        total_score_max = (payload.get("extra_blocks") or {}).get("total_score_max") or analysis.methodology_max_score
+        criterion_max_scores = {item.get("code"): item.get("max_score") for item in payload.get("criteria", [])}
         lines = [
             "ЦИФРОВОЙ МЕНТОР",
             "Предварительная оценка документа ВКР-стартапа",
             "",
             f"Работа: {document.original_name}",
-            f"Общий балл: {report.get('overall_score')} / 60",
+            f"Методология: {analysis.methodology_name or analysis.methodology_id} {analysis.methodology_version}",
+            f"Общий балл: {report.get('overall_score')} / {total_score_max or '—'}",
             "",
             "Оценки по критериям:",
         ]
         for item in report.get("criteria", []):
-            lines.append(f"- {item.get('code')}. {item.get('name')}: {item.get('score')} / 10. {item.get('comment')}")
+            criterion_max = item.get("max_score") or criterion_max_scores.get(item.get("code")) or 10
+            lines.append(f"- {item.get('code')}. {item.get('name')}: {item.get('score')} / {criterion_max}. {item.get('comment')}")
             for strength in item.get("strengths", []):
                 lines.append(f"  Сильная сторона: {strength}")
             for issue in item.get("issues", []):
@@ -217,6 +232,11 @@ class ReportService:
 
     def _build_detailed_lines(self, analysis: Analysis, document: Document, payload: dict) -> list[str]:
         extra = payload.get("extra_blocks") or {}
+        candidate_report = extra.get("rule_based_report") or extra.get("candidate_dissertation_report")
+        if analysis.methodology_id in {"SCIENTIFIC_ARTICLE", "GRADUATION_THESIS", "MASTER_DISSERTATION", "COURSE_PAPER", "INTERNSHIP_REPORT", "RESEARCH_REPORT", "DOCTORAL_DISSERTATION", "DISSERTATION_ABSTRACT"} and candidate_report:
+            return self._build_rule_based_report_lines(analysis, document, candidate_report, payload, detailed=True)
+        if analysis.methodology_id == "CANDIDATE_DISSERTATION" and candidate_report:
+            return self._build_candidate_report_lines(analysis, document, candidate_report, payload, detailed=True)
         demo_report = extra.get("demo_report") or {}
         mentor_report = extra.get("mentor_report") or {}
         source_report = demo_report or mentor_report
@@ -228,7 +248,7 @@ class ReportService:
             "",
             f"Работа: {document.original_name}",
             f"Дата анализа: {analysis.completed_at or analysis.created_at}",
-            f"Методология: {(payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {(payload.get('methodology') or {}).get('methodology_version', analysis.methodology_version)}",
+            f"Методология: {analysis.methodology_name or (payload.get('methodology') or {}).get('methodology_id', analysis.methodology_id)} {analysis.methodology_version}",
             "",
             "1. Краткое заключение:",
             payload.get("verdict") or source_report.get("conclusion") or source_report.get("what_this_work_is") or "",
@@ -237,9 +257,13 @@ class ReportService:
         ]
         if demo_report.get("criteria"):
             for item in demo_report.get("criteria", []):
+                criterion_max = item.get("max_score") or next(
+                    (criterion.get("max_score") for criterion in payload.get("criteria", []) if criterion.get("code") == item.get("code")),
+                    None,
+                ) or 10
                 lines.extend(
                     [
-                        f"- {item.get('name')}: {item.get('score')} / 10",
+                        f"- {item.get('name')}: {item.get('score')} / {criterion_max}",
                         f"  Комментарий: {item.get('comment')}",
                         *[f"  Сильная сторона: {value}" for value in item.get("strengths", [])],
                         *[f"  Требует доработки: {value}" for value in item.get("issues", [])],
@@ -318,6 +342,72 @@ class ReportService:
                 "- Финальные выводы требуют проверки человеком.",
             ]
         )
+        return lines
+
+    def _build_candidate_report_lines(self, analysis: Analysis, document: Document, report: dict, payload: dict, *, detailed: bool) -> list[str]:
+        candidate_report = {"title": "Предварительный анализ кандидатской диссертации", "methodology_name": "Кандидатская диссертация", **report}
+        return self._build_rule_based_report_lines(analysis, document, candidate_report, payload, detailed=detailed)
+
+    def _build_rule_based_report_lines(self, analysis: Analysis, document: Document, report: dict, payload: dict, *, detailed: bool) -> list[str]:
+        overall_score = payload.get("overall_score")
+        evaluated_max = report.get("evaluated_max_score")
+        score_label = (
+            "не рассчитывалась — нет автоматически проверенных применимых правил"
+            if overall_score is None or not evaluated_max
+            else f"{overall_score} / {evaluated_max}"
+        )
+        lines = [
+            "DIGITAL MENTOR",
+            report.get("title") or "Предварительный анализ документа",
+            "",
+            f"Работа: {document.original_name}",
+            f"Методология: {report.get('methodology_name') or analysis.methodology_name or analysis.methodology_id}",
+            f"Версия: {analysis.methodology_version}",
+            f"Внутренняя предварительная оценка Digital Mentor: {score_label}",
+            f"Номинальная шкала: {report.get('nominal_max_score')} баллов",
+            f"Полнота автоматической проверки: {round(float(report.get('coverage') or 0) * 100)}%",
+            "",
+            payload.get("verdict") or "",
+            "",
+            "Результаты по критериям:",
+        ]
+        for item in payload.get("criteria", []):
+            score = "Не проверялось автоматически" if item.get("score") is None else f"{item.get('score')} / {item.get('max_score')}"
+            lines.extend([f"- {item.get('code')} {item.get('title')}: {score}", f"  {item.get('explanation') or ''}"])
+        lines.extend(["", "Сильные стороны:"])
+        lines.extend(f"- {item}" for item in payload.get("strengths", []))
+        lines.extend(["", "Существенные замечания:"])
+        lines.extend(f"- {item}" for item in payload.get("improvements", []))
+        lines.extend(["", "Рекомендации:"])
+        lines.extend(f"- {item.get('title')}" for item in payload.get("recommendations", []))
+        represented = report.get("represented_result") or {}
+        if represented.get("text"):
+            lines.extend(["", represented.get("title") or "Результат, представленный в работе", represented["text"]])
+            if detailed:
+                for evidence in represented.get("evidence") or []:
+                    if evidence.get("quote"):
+                        lines.append(f"- {evidence['quote']}")
+        lines.extend(["", "Что не проверялось автоматически:"])
+        for item in report.get("not_checked", []):
+            lines.append(f"- {item.get('title')}: параметр не проверялся автоматически")
+        limitations = report.get("limitations") or []
+        if limitations:
+            lines.extend(["", "В рамках данного анализа не выполняются:"])
+            lines.extend(f"- {item}" for item in limitations)
+        if detailed and report.get("source_type") != "INTERNAL_METHODOLOGY":
+            lines.extend(["", "Нормативные основания rule checks:"])
+            for item in report.get("rule_checks", []):
+                if item.get("source_type") != "NORMATIVE_DOCUMENT" or not item.get("source_document"):
+                    continue
+                pages = "–".join(str(value) for value in item.get("source_pages") or [])
+                lines.extend(
+                    [
+                        f"- {item.get('title')} — {item.get('status')}",
+                        f"  Вывод: {item.get('finding')}",
+                        f"  Основание: {item.get('source_document')}, {item.get('source_section')}, стр. {pages}",
+                    ]
+                )
+        lines.extend(["", report.get("disclaimer") or ""])
         return lines
 
     @staticmethod

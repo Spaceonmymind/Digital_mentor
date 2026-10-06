@@ -2,10 +2,24 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+
+
+class WorkType(Base):
+    __tablename__ = "work_types"
+
+    code: Mapped[str] = mapped_column(String(64), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="NOT_CONFIGURED")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    configuration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    methodologies: Mapped[list["Methodology"]] = relationship(back_populates="work_type")
 
 
 class Methodology(Base):
@@ -13,6 +27,7 @@ class Methodology(Base):
     __table_args__ = (UniqueConstraint("code", "version", name="uq_methodologies_code_version"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    work_type_code: Mapped[str | None] = mapped_column(String(64), ForeignKey("work_types.code"), index=True)
     code: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -20,8 +35,13 @@ class Methodology(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str | None] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+    max_score: Mapped[int | None] = mapped_column(Integer)
+    applicable_formats: Mapped[list] = mapped_column(JSON, nullable=False, default=lambda: ["pdf", "docx"])
+    configuration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
+    work_type: Mapped[WorkType | None] = relationship(back_populates="methodologies")
     criteria: Mapped[list["MethodologyCriterion"]] = relationship(back_populates="methodology")
     prompts: Mapped[list["PromptTemplate"]] = relationship(back_populates="methodology")
     agents: Mapped[list["MethodologyAgent"]] = relationship(back_populates="methodology")
@@ -37,6 +57,9 @@ class MethodologyCriterion(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     weight: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
+    max_score: Mapped[int | None] = mapped_column(Integer)
+    required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    configuration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str | None] = mapped_column(String(128))
@@ -58,6 +81,7 @@ class MethodologyIndicator(Base):
     weight: Mapped[Decimal | None] = mapped_column(Numeric(8, 4))
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    configuration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str | None] = mapped_column(String(128))
     version: Mapped[str | None] = mapped_column(String(128))
@@ -103,6 +127,7 @@ class MethodologyAgent(Base):
     is_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     source: Mapped[str | None] = mapped_column(String(128))
     is_demo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    configuration: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     methodology: Mapped[Methodology] = relationship(back_populates="agents")
     prompt_template: Mapped[PromptTemplate | None] = relationship()

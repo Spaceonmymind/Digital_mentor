@@ -10,6 +10,11 @@ class MethodologyCreate(BaseModel):
     description: str | None = None
     version: str = Field(..., min_length=1, max_length=128)
     is_active: bool = True
+    work_type_code: str | None = Field(default=None, max_length=64)
+    status: str = Field(default="ACTIVE", max_length=32)
+    max_score: int | None = Field(default=None, ge=0)
+    applicable_formats: list[str] = Field(default_factory=lambda: ["pdf", "docx"])
+    configuration: dict = Field(default_factory=dict)
 
 
 class MethodologyIndicatorResponse(BaseModel):
@@ -20,6 +25,7 @@ class MethodologyIndicatorResponse(BaseModel):
     weight: Decimal | None
     order_index: int
     required: bool = True
+    configuration: dict = Field(default_factory=dict)
     is_demo: bool
     source: str | None = None
     version: str | None = None
@@ -31,6 +37,9 @@ class MethodologyCriterionResponse(BaseModel):
     title: str
     description: str | None
     weight: Decimal | None
+    max_score: int | None = None
+    required: bool = True
+    configuration: dict = Field(default_factory=dict)
     order_index: int
     is_demo: bool
     source: str | None = None
@@ -70,6 +79,7 @@ class MethodologyAgentResponse(BaseModel):
     is_required: bool
     source: str | None = None
     is_demo: bool
+    configuration: dict = Field(default_factory=dict)
 
 
 class MethodologyResponse(BaseModel):
@@ -83,6 +93,11 @@ class MethodologyResponse(BaseModel):
     is_active: bool
     is_demo: bool
     source: str | None = None
+    work_type_code: str | None = None
+    status: str = "ACTIVE"
+    max_score: int | None = None
+    applicable_formats: list[str] = Field(default_factory=list)
+    configuration: dict = Field(default_factory=dict)
     created_at: datetime
 
 
@@ -90,3 +105,21 @@ class MethodologyFullResponse(MethodologyResponse):
     criteria: list[MethodologyCriterionResponse]
     prompts: list[PromptTemplateResponse]
     agents: list[MethodologyAgentResponse] = []
+
+
+class ActiveMethodologySummary(BaseModel):
+    methodology_id: str
+    name: str
+    version: str
+    max_score: int | None = None
+    criteria_count: int
+
+
+class WorkTypeCatalogItem(BaseModel):
+    work_type: str
+    display_name: str
+    description: str
+    availability: str
+    active_methodology: ActiveMethodologySummary | None = None
+    active_version: str | None = None
+    max_score: int | None = None

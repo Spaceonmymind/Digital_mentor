@@ -8,8 +8,8 @@ from app.schemas.methodology import AgentTraceItem, AnalysisEvidence, Methodolog
 class CriterionResult(BaseModel):
     code: str
     title: str
-    score: int
-    max_score: int = 100
+    score: int | None
+    max_score: int | None = 100
     explanation: str
 
 

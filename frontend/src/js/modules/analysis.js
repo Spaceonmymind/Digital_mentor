@@ -6,7 +6,7 @@ import { analysisSteps, mockMentorAnalysis } from "../../mocks/mentorAnalysis.js
 const POLL_INTERVAL = 1400;
 
 
-export async function runAnalysis(documentId, onProgress) {
+export async function runAnalysis(documentId, methodologySelection, onProgress) {
   if (FRONTEND_MOCK_MODE) {
     return mockMentorAnalysis((index) => {
       const step = analysisSteps[index];
@@ -23,8 +23,9 @@ export async function runAnalysis(documentId, onProgress) {
   const created = await createAnalysis({
     document_id: documentId,
     analysis_type: "mentor",
-    methodology_id: "mentor-default",
-    methodology_version: "draft",
+    work_type: methodologySelection.work_type,
+    methodology_id: methodologySelection.active_methodology.methodology_id,
+    methodology_version: methodologySelection.active_version,
     mode: window.__MENTOR_DEMO_MODE__ ? "demo" : "standard",
   });
 

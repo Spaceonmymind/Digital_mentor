@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate
+from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate, WorkType
 
 
 class MethodologyRepository:
@@ -19,6 +19,11 @@ class MethodologyRepository:
         description: str | None = None,
         is_active: bool = True,
         is_demo: bool = False,
+        work_type_code: str | None = None,
+        status: str = "ACTIVE",
+        max_score: int | None = None,
+        applicable_formats: list[str] | None = None,
+        configuration: dict | None = None,
     ) -> Methodology:
         methodology = Methodology(
             code=code,
@@ -27,6 +32,11 @@ class MethodologyRepository:
             description=description,
             is_active=is_active,
             is_demo=is_demo,
+            work_type_code=work_type_code,
+            status=status,
+            max_score=max_score,
+            applicable_formats=applicable_formats or ["pdf", "docx"],
+            configuration=configuration or {},
         )
         self.session.add(methodology)
         await self.session.commit()
@@ -45,6 +55,33 @@ class MethodologyRepository:
             .limit(1)
         )
         return result.scalar_one_or_none()
+
+    async def get_version(self, code: str, version: str) -> Methodology | None:
+        result = await self.session.execute(
+            select(Methodology).where(Methodology.code == code, Methodology.version == version).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_active_for_work_type(self, work_type: str) -> Methodology | None:
+        result = await self.session.execute(
+            select(Methodology)
+            .where(Methodology.work_type_code == work_type, Methodology.is_active.is_(True))
+            .order_by(Methodology.version.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_version_for_work_type(self, work_type: str, version: str) -> Methodology | None:
+        result = await self.session.execute(
+            select(Methodology)
+            .where(Methodology.work_type_code == work_type, Methodology.version == version)
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_work_types(self) -> Sequence[WorkType]:
+        result = await self.session.execute(select(WorkType).order_by(WorkType.sort_order, WorkType.display_name))
+        return result.scalars().all()
 
     async def list(self, is_active: bool | None = None) -> Sequence[Methodology]:
         query = select(Methodology).order_by(Methodology.code)

@@ -22,6 +22,11 @@ async def create_methodology(
         version=payload.version,
         description=payload.description,
         is_active=payload.is_active,
+        work_type_code=payload.work_type_code,
+        status=payload.status,
+        max_score=payload.max_score,
+        applicable_formats=payload.applicable_formats,
+        configuration=payload.configuration,
     )
     return MethodologyResponse.model_validate(methodology)
 

@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 const root = resolve(import.meta.dirname, "..");
 const html = readFileSync(resolve(root, "index.html"), "utf8");
 const app = readFileSync(resolve(root, "src/js/app.js"), "utf8");
+const analysis = readFileSync(resolve(root, "src/js/modules/analysis.js"), "utf8");
 const css = readFileSync(resolve(root, "src/styles/global.css"), "utf8");
 const speech = readFileSync(resolve(root, "src/js/modules/speech.js"), "utf8");
 const mascot = readFileSync(resolve(root, "src/js/modules/mascot.js"), "utf8");
@@ -26,6 +27,21 @@ for (const id of [
   "documentPageHighlight",
   "recommendationProgressBar",
   "recommendationModal",
+  "workTypeSelect",
+  "workTypeDescription",
+  "candidateChecks",
+  "ruleBasedReportTitle",
+  "ruleBasedMethodology",
+  "representedResult",
+  "representedResultTitle",
+  "representedResultText",
+  "candidateCoverage",
+  "candidateCheckedList",
+  "candidateNotCheckedList",
+  "candidateRuleList",
+  "candidateDisclaimer",
+  "methodologyLimitations",
+  "methodologyLimitationsList",
 ]) {
   assert(html.includes(`id="${id}"`), `Missing ${id}`);
 }
@@ -41,8 +57,19 @@ assert(app.includes("requestImprovementDirection"), "Improvement direction must 
 assert(app.includes("getAnalysisHistory"), "History must load from the backend");
 assert(app.includes("data-open-history"), "History items must reopen saved analyses");
 assert(app.includes("Предварительная оценка цифрового ментора"), "Missing preliminary mentor score label");
-assert(app.includes('`${score}/10`'), "Demo criteria must render X/10");
-assert(app.includes('`${normalized.overall_score} / 60`'), "Demo overall score must render XX/60");
+assert(app.includes('${score}/${maxScore}'), "Criteria must render the methodology score scale");
+assert(app.includes('`${normalized.overall_score} / ${normalized.totalScoreMax}`'), "Overall score must use methodology metadata");
+assert(app.includes("getMethodologies"), "Work type catalog must load from backend");
+assert(analysis.includes("methodologySelection.work_type"), "Selected work type must be sent to backend");
+assert(app.includes("Методология для данного типа работы находится в подготовке"), "Unavailable methodology message is missing");
+assert(app.includes('availability !== "AVAILABLE"'), "Unavailable work types must block analysis");
+assert(app.includes("candidate_dissertation_report"), "Candidate Dissertation result block must be normalized");
+assert(app.includes("rule_based_report"), "Rule-based methodologies must use the shared renderer");
+assert(app.includes("scientific_article_report"), "Scientific Article result block must be normalized");
+assert(app.includes("Не проверялось автоматически"), "NOT_CHECKED must have a neutral user-facing label");
+assert(app.includes("report.evaluated_max_score"), "Candidate score must use the evaluated denominator");
+assert(app.includes("report.nominal_max_score"), "Candidate result must disclose the nominal 70-point scale");
+assert(css.includes(".candidate-checks__columns"), "Candidate checked/not-checked sections must be styled");
 assert(app.includes("criterion__details"), "Demo criteria must provide compact details");
 assert(app.includes("Подробнее"), "Demo criteria must include the details control");
 assert(app.includes("truncateToSentence"), "Report previews must truncate at sentence boundaries");

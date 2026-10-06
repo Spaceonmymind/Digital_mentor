@@ -200,9 +200,9 @@ class MockAnalysisEngine:
 
 def get_analysis_engine() -> MockAnalysisEngine:
     if settings.analysis_engine == "startup_vkr_agents":
-        from app.execution.startup_vkr import StartupVkrAnalysisEngine
+        from app.services.methodology_analysis_engine import MethodologyAnalysisEngine
 
-        return StartupVkrAnalysisEngine()
+        return MethodologyAnalysisEngine()
     if settings.analysis_engine == "assessment_worker":
         from app.services.assessment_worker_analysis_engine import AssessmentWorkerAnalysisEngine
 

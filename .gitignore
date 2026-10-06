@@ -8,6 +8,14 @@ __pycache__/
 .docker-build-config/
 brandbook/
 .env
+.env.*
+!.env.example
+tmp/
+output/
+*.log
+*.sqlite
+*.sqlite3
+*.db
 storage/documents/*
 storage/extracted/*
 storage/reports/*

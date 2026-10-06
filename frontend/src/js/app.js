@@ -19,6 +19,7 @@ import {
   getDetailedReportStatus,
   getDocument,
   getDocumentPagePreviewUrl,
+  getMethodologies,
   getPublicConfig,
   startDetailedReport,
 } from "./api.js";
@@ -52,6 +53,8 @@ const state = {
   detailedReport: null,
   detailedReportPoll: null,
   evidence: [],
+  workTypes: [],
+  selectedWorkType: null,
   visualProgress: 0,
   visualProgressTarget: 0,
   visualProgressCeiling: 12,
@@ -89,6 +92,8 @@ const elements = {
   fileMeta: document.getElementById("fileMeta"),
   removeFileButton: document.getElementById("removeFileButton"),
   startAnalysisButton: document.getElementById("startAnalysisButton"),
+  workTypeSelect: document.getElementById("workTypeSelect"),
+  workTypeDescription: document.getElementById("workTypeDescription"),
   cancelAnalysisButton: document.getElementById("cancelAnalysisButton"),
   processingFileName: document.getElementById("processingFileName"),
   processingPercent: document.getElementById("processingPercent"),
@@ -106,6 +111,19 @@ const elements = {
   summaryResetButton: document.getElementById("summaryResetButton"),
   criteriaList: document.getElementById("criteriaList"),
   criteriaScoreSummary: document.getElementById("criteriaScoreSummary"),
+  candidateChecks: document.getElementById("candidateChecks"),
+  ruleBasedReportTitle: document.getElementById("ruleBasedReportTitle"),
+  ruleBasedMethodology: document.getElementById("ruleBasedMethodology"),
+  representedResult: document.getElementById("representedResult"),
+  representedResultTitle: document.getElementById("representedResultTitle"),
+  representedResultText: document.getElementById("representedResultText"),
+  methodologyLimitations: document.getElementById("methodologyLimitations"),
+  methodologyLimitationsList: document.getElementById("methodologyLimitationsList"),
+  candidateCoverage: document.getElementById("candidateCoverage"),
+  candidateCheckedList: document.getElementById("candidateCheckedList"),
+  candidateNotCheckedList: document.getElementById("candidateNotCheckedList"),
+  candidateRuleList: document.getElementById("candidateRuleList"),
+  candidateDisclaimer: document.getElementById("candidateDisclaimer"),
   projectLevel: document.getElementById("projectLevel"),
   strengthsList: document.getElementById("strengthsList"),
   improvementsList: document.getElementById("improvementsList"),
@@ -463,6 +481,50 @@ function getFileExtension(fileName) {
   return extension.toUpperCase();
 }
 
+function selectedMethodology() {
+  return state.workTypes.find((item) => item.work_type === state.selectedWorkType) || null;
+}
+
+function updateStartAnalysisAvailability() {
+  const selection = selectedMethodology();
+  const available = selection?.availability === "AVAILABLE" && selection.active_methodology;
+  elements.startAnalysisButton.disabled = !(state.document?.id && available);
+}
+
+function renderWorkTypeSelection() {
+  elements.workTypeSelect.innerHTML = state.workTypes
+    .map((item) => `<option value="${item.work_type}">${item.display_name}${item.availability === "AVAILABLE" ? "" : " — скоро"}</option>`)
+    .join("");
+  const preferred = state.workTypes.find((item) => item.work_type === "STARTUP_VKR") || state.workTypes[0];
+  if (!state.selectedWorkType && preferred) state.selectedWorkType = preferred.work_type;
+  elements.workTypeSelect.value = state.selectedWorkType || "";
+  renderSelectedMethodology();
+}
+
+function renderSelectedMethodology() {
+  const selection = selectedMethodology();
+  const available = selection?.availability === "AVAILABLE" && selection.active_methodology;
+  elements.workTypeSelect.closest(".work-type-field")?.classList.toggle("is-unavailable", !available);
+  if (available) {
+    elements.workTypeDescription.textContent = `Анализ выполняется по методологии ${selection.active_methodology.name} ${selection.active_version}`;
+  } else {
+    elements.workTypeDescription.textContent = "Методология для данного типа работы находится в подготовке";
+  }
+  updateStartAnalysisAvailability();
+}
+
+async function loadMethodologyCatalog() {
+  try {
+    state.workTypes = await getMethodologies();
+  } catch (error) {
+    state.workTypes = FRONTEND_MOCK_MODE
+      ? [{ work_type: "STARTUP_VKR", display_name: "ВКР в виде стартапа", availability: "AVAILABLE", active_version: "2.0", active_methodology: { methodology_id: "STARTUP_VKR", name: "ВКР в виде стартапа", version: "2.0", max_score: 60 } }]
+      : [];
+    if (!state.workTypes.length) showNotification(error.message || "Не удалось загрузить каталог методологий.");
+  }
+  renderWorkTypeSelection();
+}
+
 async function setFile(file) {
   if (!file) return;
 
@@ -486,7 +548,7 @@ async function setFile(file) {
     state.document = documentMetadata;
     elements.fileName.textContent = documentMetadata.name;
     elements.fileMeta.textContent = `${extension} · ${formatFileSize(documentMetadata.size)}`;
-    elements.startAnalysisButton.disabled = false;
+    updateStartAnalysisAvailability();
     setMentor("success", "Документ получен. Я готов приступить к анализу.");
   } catch (error) {
     state.document = null;
@@ -664,22 +726,25 @@ function renderResults(result) {
 
   elements.criteriaList.innerHTML = normalized.criteria
     .map(
-      ({ code, title, score, explanation, strengths = [], issues = [], recommendations = [] }) => {
+      ({ code, title, score, max_score: criterionMaxScore, explanation, strengths = [], issues = [], recommendations = [] }) => {
         const evidence = state.evidence.filter((item) => item.criterion_code === code);
         const preview = truncateToSentence(explanation || getScoreLevel(score), 220);
-        const scoreLevel = score <= 3 ? "Слабая проработка" : score <= 6 ? "Требует доработки" : score <= 8 ? "Хорошо" : "Очень хорошо";
+        const maxScore = criterionMaxScore || (normalized.isMentorReport ? 5 : 100);
+        const wasChecked = score !== null && score !== undefined && maxScore;
+        const scoreRatio = wasChecked ? score / maxScore : 0;
+        const scoreLevel = scoreRatio <= 0.3 ? "Слабая проработка" : scoreRatio <= 0.6 ? "Требует доработки" : scoreRatio <= 0.8 ? "Хорошо" : "Очень хорошо";
         return `
         <div class="criterion">
           <div class="criterion__head">
             <span>${normalized.isDemoReport && code ? `${code}. ` : ""}${title}</span>
-            <strong>${normalized.isMentorReport ? `${score}/5` : normalized.isDemoReport ? `${score}/10` : `${score}%`}</strong>
+            <strong>${wasChecked ? `${score}/${maxScore}` : "Не проверялось автоматически"}</strong>
           </div>
           <small>${preview}</small>
           ${normalized.isDemoReport ? `<div class="criterion__signals">
             ${strengths[0] ? `<span class="is-strength">+ ${strengths[0]}</span>` : ""}
             ${issues[0] ? `<span class="is-issue">! ${issues[0]}</span>` : ""}
           </div>` : ""}
-          <div class="progress"><span style="width: ${normalized.isMentorReport ? Math.round((score / 5) * 100) : normalized.isDemoReport ? Math.round((score / 10) * 100) : score}%"></span></div>
+          <div class="progress"><span style="width: ${Math.max(0, Math.min(100, Math.round(scoreRatio * 100)))}%"></span></div>
           ${normalized.isDemoReport ? `<span class="criterion__score-label">${scoreLevel}</span>` : ""}
           ${normalized.isDemoReport ? `
             <details class="criterion__details">
@@ -699,21 +764,29 @@ function renderResults(result) {
     .join("");
   bindEvidenceButtons(elements.criteriaList);
 
-  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport ? "Текущая стадия" : normalized.isDemoReport ? "Предварительная оценка цифрового ментора" : "Итоговая оценка";
-  document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score} / 60` : `${normalized.overall_score} / 100`;
+  document.querySelector(".score-card .eyebrow").textContent = normalized.isMentorReport
+    ? "Текущая стадия"
+    : normalized.isDemoReport
+      ? "Предварительная оценка цифрового ментора"
+      : normalized.candidateReport
+        ? "Внутренняя предварительная оценка Digital Mentor"
+        : "Итоговая оценка";
+  document.querySelector(".score-card strong").textContent = normalized.isMentorReport ? normalized.currentStage : `${normalized.overall_score} / ${normalized.totalScoreMax}`;
   document.querySelector(".score-card > div span").textContent = normalized.verdict;
   const ring = document.querySelector(".score-ring");
-  const scorePercent = normalized.isMentorReport ? 50 : normalized.isDemoReport ? Math.round((normalized.overall_score / 60) * 100) : normalized.overall_score;
-  ring.textContent = normalized.isMentorReport ? normalized.currentStage : normalized.isDemoReport ? `${normalized.overall_score}/60` : normalized.overall_score;
+  const scorePercent = normalized.isMentorReport ? 50 : normalized.totalScoreMax ? Math.round((normalized.overall_score / normalized.totalScoreMax) * 100) : 0;
+  ring.textContent = normalized.isMentorReport ? normalized.currentStage : `${normalized.overall_score}/${normalized.totalScoreMax}`;
   ring.style.setProperty("--score-angle", `${Math.max(0, Math.min(100, scorePercent)) * 3.6}deg`);
   elements.projectLevel.textContent = normalized.isMentorReport
     ? `Стадия ${normalized.currentStage}`
-    : normalized.overall_score >= 51 ? "Высокая готовность" : normalized.overall_score >= 42 ? "Хорошая проработка" : "Требует доработки";
-  elements.criteriaScoreSummary.innerHTML = normalized.criteria.slice(0, 6).map((criterion) => {
+    : scorePercent >= 85 ? "Высокая готовность" : scorePercent >= 70 ? "Хорошая проработка" : "Требует доработки";
+  elements.criteriaScoreSummary.innerHTML = normalized.criteria.map((criterion) => {
     const max = criterion.max_score || (normalized.isDemoReport ? 10 : 100);
-    const percent = Math.max(0, Math.min(100, Math.round((criterion.score / max) * 100)));
-    return `<div title="${scoreTooltip(criterion.score, max)}"><span>${criterion.code || "C"}</span><strong>${criterion.score}/${max}</strong><i><b style="width:${percent}%"></b></i></div>`;
+    const checked = criterion.score !== null && criterion.score !== undefined && max;
+    const percent = checked ? Math.max(0, Math.min(100, Math.round((criterion.score / max) * 100))) : 0;
+    return `<div class="${checked ? "" : "is-not-checked"}" title="${checked ? scoreTooltip(criterion.score, max) : "Не проверялось автоматически"}"><span>${criterion.code || "C"}</span><strong>${checked ? `${criterion.score}/${max}` : "—"}</strong><i><b style="width:${percent}%"></b></i></div>`;
   }).join("");
+  renderCandidateChecks(normalized.candidateReport);
   renderList(elements.strengthsList, normalized.strengths);
   renderList(elements.improvementsList, normalized.improvements);
   renderList(elements.aiRiskList, normalized.aiRisk.factors);
@@ -740,6 +813,7 @@ function normalizeResult(result) {
     return normalizeDemoReportResult(result, demoReport);
   }
   const aiRisk = result.ai_risk || { factors: result.aiRiskFactors || [] };
+  const candidateReport = extraBlocks.rule_based_report || extraBlocks.candidate_dissertation_report || extraBlocks.scientific_article_report || null;
 
   return {
     analysis_id: result.analysis_id || state.analysisId,
@@ -756,27 +830,60 @@ function normalizeResult(result) {
     remarks: result.remarks || [],
     aiRisk,
     recommendations: result.recommendations || recommendationPlan,
+    totalScoreMax: extraBlocks.total_score_max || result.total_score_max || 100,
+    methodology: result.methodology || null,
+    candidateReport,
     isMentorReport: false,
     isDemoReport: false,
   };
 }
 
+function renderCandidateChecks(report) {
+  elements.candidateChecks.hidden = !report;
+  if (!report) return;
+  elements.ruleBasedReportTitle.textContent = report.title || "Полнота автоматической проверки";
+  elements.ruleBasedMethodology.textContent = `Методология: ${report.methodology_name || "Digital Mentor"}. Версия: ${report.methodology_version || "—"}.`;
+  const represented = report.represented_result || null;
+  elements.representedResult.hidden = !represented?.text;
+  elements.representedResultTitle.textContent = represented?.title || "Результат, представленный в работе";
+  elements.representedResultText.textContent = represented?.text || "";
+  const coverage = Math.round((report.coverage || 0) * 100);
+  elements.candidateCoverage.textContent = `Проверено ${coverage}% применимых обязательных правил. Оценка: ${state.result.overall_score}/${report.evaluated_max_score}; номинальная шкала — ${report.nominal_max_score}.`;
+  const capabilityLabels = { TEXT: "Содержание текста", STRUCTURE: "Структура документа", CROSS_REFERENCE: "Связи между разделами и ссылками", DOCX_FORMATTING: "Доступные параметры DOCX" };
+  elements.candidateCheckedList.innerHTML = (report.checked_capabilities || []).map((item) => `<li>${capabilityLabels[item] || "Доступная автоматическая проверка"}</li>`).join("") || "<li>Нет достоверно проверенных параметров.</li>";
+  elements.candidateNotCheckedList.innerHTML = (report.not_checked || []).map((item) => `<li><strong>${item.title}</strong>: Не проверялось автоматически</li>`).join("") || "<li>Все применимые параметры проверены.</li>";
+  const statusLabels = { PASS: "Выполнено", PARTIAL: "Выполнено частично", FAIL: "Требует исправления", NOT_APPLICABLE: "Не применимо", NOT_CHECKED: "Не проверялось автоматически" };
+  elements.candidateRuleList.innerHTML = (report.rule_checks || []).map((item) => {
+    const evidence = (item.evidence || []).map((entry) => `<blockquote>${entry.quote || ""}</blockquote>`).join("");
+    const source = item.source_type !== "INTERNAL_METHODOLOGY" && item.source_document
+      ? `<small>Основание: ${item.source_document}${item.source_section ? `, ${item.source_section}` : ""}${(item.source_pages || []).length ? `, стр. ${item.source_pages.join("–")}` : ""}</small>` : "";
+    return `<article class="candidate-rule is-${item.status.toLowerCase().replaceAll("_", "-")}"><strong>${item.title}</strong><span>${statusLabels[item.status] || item.status}</span><p>${item.finding}</p>${evidence}${item.recommendation ? `<p><b>Что изменить:</b> ${item.recommendation}</p>` : ""}${source}</article>`;
+  }).join("");
+  elements.methodologyLimitations.hidden = !(report.limitations || []).length;
+  elements.methodologyLimitationsList.innerHTML = (report.limitations || []).map((item) => `<li>${item}</li>`).join("");
+  elements.candidateDisclaimer.textContent = report.disclaimer || "";
+}
+
 function normalizeDemoReportResult(result, report) {
+  const criteriaByCode = new Map((result.criteria || []).map((item) => [item.code, item]));
+  const criteria = (report.criteria || []).map((item, index) => ({
+    code: item.code || `C${index + 1}`,
+    title: item.name,
+    score: item.score,
+    max_score: item.max_score || criteriaByCode.get(item.code)?.max_score || 10,
+    explanation: item.comment,
+    strengths: item.strengths || [],
+    issues: item.issues || [],
+    recommendations: (report.recommendations || []).slice(index, index + 1),
+  }));
   return {
     analysis_id: result.analysis_id || state.analysisId,
     overall_score: report.overall_score,
     currentStage: null,
     verdict: report.conclusion,
-    criteria: (report.criteria || []).map((item, index) => ({
-      code: item.code || `C${index + 1}`,
-      title: item.name,
-      score: item.score,
-      max_score: 10,
-      explanation: item.comment,
-      strengths: item.strengths || [],
-      issues: item.issues || [],
-      recommendations: (report.recommendations || []).slice(index, index + 1),
-    })),
+    criteria,
+    totalScoreMax: result.extra_blocks?.total_score_max || criteria.reduce((sum, item) => sum + item.max_score, 0),
+    methodology: result.methodology || null,
     strengths: report.strengths || [],
     improvements: report.remarks || [],
     remarks: (report.remarks || []).map((item, index) => ({
@@ -876,7 +983,7 @@ function getScoreLevel(score) {
 function renderSummary(result) {
   elements.summaryScore.textContent = result.isMentorReport ? result.currentStage : result.overall_score;
   const summaryScoreCaption = document.querySelector(".summary-score span");
-  if (summaryScoreCaption) summaryScoreCaption.textContent = result.isMentorReport ? "текущая стадия" : result.isDemoReport ? "из 60" : "из 100";
+  if (summaryScoreCaption) summaryScoreCaption.textContent = result.isMentorReport ? "текущая стадия" : `из ${result.totalScoreMax}`;
   elements.summaryVerdict.textContent = result.spokenSummary || result.verdict;
   renderList(elements.summaryStrengths, result.strengths.slice(0, 3));
   renderList(elements.summaryImprovements, result.improvements.slice(0, 3));
@@ -1132,6 +1239,11 @@ async function askMentor(question) {
 
 async function startAnalysis() {
   if (!state.document?.id) return;
+  const methodologySelection = selectedMethodology();
+  if (!methodologySelection?.active_methodology || methodologySelection.availability !== "AVAILABLE") {
+    showNotification("Методология для выбранного типа работы пока недоступна.");
+    return;
+  }
 
   elements.processingFileName.textContent = state.document.name || state.file?.name || "Работа";
   elements.processingPercent.textContent = "0%";
@@ -1148,7 +1260,7 @@ async function startAnalysis() {
   setMentor("thinking", analysisSteps[0].message, { cue: "analysis" });
 
   try {
-    const result = await runAnalysis(state.document.id, (status) => {
+    const result = await runAnalysis(state.document.id, methodologySelection, (status) => {
       if (status.frontendStepIndex !== undefined) {
         renderAnalysisSteps(status.frontendStepIndex, status.progress || 0);
       } else {
@@ -1265,7 +1377,7 @@ async function renderHistory() {
             <article class="history-item">
               <div>
                 <strong>${item.document_name}</strong>
-                <span>${new Date(item.created_at).toLocaleString("ru-RU")} · ${item.methodology_id} ${item.methodology_version} · ${item.overall_score ?? "—"}/${item.total_score_max || 60} · ${item.status}</span>
+                <span>${new Date(item.created_at).toLocaleString("ru-RU")} · ${item.work_type_display_name || "Тип не указан"} · ${item.methodology_name || item.methodology_id} ${item.methodology_version} · ${item.overall_score ?? "—"}/${item.total_score_max ?? "—"} · ${item.status}</span>
               </div>
               <button class="button button--ghost" type="button" data-open-history="${item.analysis_id}" data-document-id="${item.document_id}">Открыть</button>
             </article>
@@ -1436,6 +1548,10 @@ function bindEvents() {
 
   elements.chooseFileButton.addEventListener("click", () => elements.fileInput.click());
   elements.startDemoButton.addEventListener("click", beginWork);
+  elements.workTypeSelect.addEventListener("change", () => {
+    state.selectedWorkType = elements.workTypeSelect.value;
+    renderSelectedMethodology();
+  });
   elements.sidebarToggle.addEventListener("click", () => setSidebarCollapsed(!state.sidebarCollapsed));
   elements.fileInput.addEventListener("change", () => {
     enableSpeech();
@@ -1648,6 +1764,7 @@ function bindEvents() {
 
 async function init() {
   await loadPublicConfig();
+  await loadMethodologyCatalog();
   renderIcons();
   renderAnalysisSteps();
   bindEvents();

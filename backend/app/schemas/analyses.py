@@ -12,14 +12,19 @@ AnalysisMode = Literal["demo", "standard", "expert"]
 class AnalysisCreateRequest(BaseModel):
     document_id: str = Field(min_length=1)
     analysis_type: Literal["mentor"] = "mentor"
-    methodology_id: str = Field(default="mentor-default", min_length=1, max_length=100)
-    methodology_version: str = Field(default="draft", min_length=1, max_length=100)
+    work_type: str | None = Field(default=None, min_length=1, max_length=64)
+    methodology_id: str | None = Field(default=None, min_length=1, max_length=100)
+    methodology_version: str | None = Field(default=None, min_length=1, max_length=100)
+    additional_parameters: dict[str, str] = Field(default_factory=dict)
     mode: AnalysisMode = "standard"
 
 
 class AnalysisCreateResponse(BaseModel):
     analysis_id: str
     status: AnalysisStatus
+    work_type: str | None = None
+    methodology_id: str
+    methodology_version: str
 
 
 class AnalysisStatusResponse(BaseModel):
@@ -32,6 +37,11 @@ class AnalysisStatusResponse(BaseModel):
     message: str | None = None
     error_message: str | None = None
     mode: AnalysisMode = "standard"
+    work_type: str | None = None
+    methodology_id: str
+    methodology_version: str
+    methodology_name: str | None = None
+    methodology_max_score: int | None = None
 
 
 class AnalysisEventResponse(BaseModel):
@@ -50,7 +60,10 @@ class AnalysisHistoryItem(BaseModel):
     document_name: str
     mime_type: str
     status: AnalysisStatus
+    work_type: str | None = None
+    work_type_display_name: str | None = None
     methodology_id: str
+    methodology_name: str | None = None
     methodology_version: str
     mode: AnalysisMode
     overall_score: int | None = None

@@ -33,6 +33,11 @@ export async function getPublicConfig() {
   return parseResponse(response);
 }
 
+export async function getMethodologies() {
+  const response = await fetch(`${API_BASE_URL}/methodologies`);
+  return parseResponse(response);
+}
+
 
 export async function getReadiness() {
   const response = await fetch("/health/ready");
