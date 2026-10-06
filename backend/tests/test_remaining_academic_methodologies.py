@@ -34,6 +34,8 @@ from app.methodology.seeds.graduation_thesis import ensure_graduation_thesis_see
 from app.methodology.seeds.master_dissertation import ensure_master_dissertation_seed
 from app.methodology.seeds.scientific_article import ensure_scientific_article_seed
 from app.methodology.seeds.startup_vkr import ensure_startup_vkr_seed
+from app.methodology.seeds.startup_vkr import data_v2 as startup_data
+from app.methodology.seeds.academic_common import IDENTIFIER_MAX_LENGTH
 from app.services.methodology_analysis_engine import MethodologyAnalysisEngine
 from app.services.reports import ReportService
 
@@ -131,3 +133,27 @@ async def test_complete_catalog_has_one_active_methodology_and_no_orphans():
     assert all(w.status=="AVAILABLE" for w in work_types)
     assert all(m.criteria and m.agents and (m.configuration or {}).get("execution_profile") for m in methodologies)
     assert all(rule.criterion_id for m in methodologies for criterion in m.criteria for rule in criterion.indicators)
+
+
+def test_all_seeded_database_identifiers_fit_varchar_36_contract():
+    datasets=[
+        (startup_data,None),
+        (__import__('app.methodology.seeds.candidate_dissertation.data_v1',fromlist=['x']),'candidate'),
+        (__import__('app.methodology.seeds.scientific_article.data_v1',fromlist=['x']),'scientific-article'),
+        (__import__('app.methodology.seeds.graduation_thesis.data_v1',fromlist=['x']),'graduation-thesis'),
+        (__import__('app.methodology.seeds.master_dissertation.data_v1',fromlist=['x']),'master-dissertation'),
+        *[(data,data.SLUG) for data,*_ in CASES],
+    ]
+    persisted=[]
+    for data,slug in datasets:
+        persisted.append(("methodologies.id",data.METHODOLOGY_ID))
+        persisted.extend(("prompt_templates.id",item["id"]) for item in data.PROMPTS)
+        for criterion in data.CRITERIA:
+            criterion_id=criterion.get("id") if slug is None else f"{slug}-1-0-{criterion['number'].lower()}"
+            persisted.append(("methodology_criteria.id",criterion_id))
+            indicators=criterion.get("indicators",criterion.get("rules",[]))
+            for item in indicators:
+                if isinstance(item,dict): persisted.append(("methodology_indicators.id",item["id"]))
+        persisted.extend(("methodology_agents.id",item[0]) for item in data.AGENTS)
+    invalid=[(field,value,len(value)) for field,value in persisted if len(value)>IDENTIFIER_MAX_LENGTH]
+    assert invalid==[]

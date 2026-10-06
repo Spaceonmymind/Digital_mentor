@@ -2,7 +2,7 @@ SOURCE_DOCUMENT = "Оформление текста рукописи диссе
 SOURCE = "FinUniversity dissertation manuscript guidelines dated 22.09.2025"
 VERSION = "candidate_dissertation_1_0"
 METHODOLOGY_VERSION = "1.0"
-METHODOLOGY_ID = "candidate-dissertation-methodology-1-0"
+METHODOLOGY_ID = "candidate-dissertation-method-1-0"
 DISCLAIMER = (
     "Результаты сформированы автоматизированной системой Digital Mentor и носят предварительный "
     "рекомендательный характер. Результаты анализа не являются официальной оценкой диссертации "

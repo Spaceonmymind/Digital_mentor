@@ -1,7 +1,14 @@
 import sqlalchemy as sa
+from app.methodology.seeds.academic_common import validate_persisted_identifier
 
 
 def upgrade_academic_methodology(bind, data):
+    validate_persisted_identifier(data.METHODOLOGY_ID,"methodologies.id")
+    for prompt in data.PROMPTS: validate_persisted_identifier(prompt["id"],"prompt_templates.id")
+    for criterion in data.CRITERIA:
+        validate_persisted_identifier(f"{data.SLUG}-1-0-{criterion['number'].lower()}","methodology_criteria.id")
+        for rule in criterion["rules"]: validate_persisted_identifier(rule["id"],"methodology_indicators.id")
+    for agent in data.AGENTS: validate_persisted_identifier(agent[0],"methodology_agents.id")
     bind.execute(sa.text("update work_types set status='AVAILABLE', description=:d where code=:code"), {"d":data.DESCRIPTION,"code":data.WORK_TYPE})
     methodologies=sa.table("methodologies",*[sa.column(n,sa.JSON if n in {"applicable_formats","configuration"} else None) for n in ("id","work_type_code","code","name","description","version","is_active","is_demo","source","status","max_score","applicable_formats","configuration")])
     bind.execute(methodologies.insert().values(id=data.METHODOLOGY_ID,work_type_code=data.WORK_TYPE,code=data.CODE,name=data.NAME,description=data.DESCRIPTION,version="1.0",is_active=True,is_demo=False,source=data.SOURCE,status="ACTIVE",max_score=data.MAX_SCORE,applicable_formats=["pdf","docx"],configuration={"execution_profile":data.PROFILE,"source_type":data.SOURCE_TYPE,"methodology_owner":"Digital Mentor","is_official":data.IS_OFFICIAL,"authority":data.AUTHORITY,"scoring_rules":{"type":"checked_applicable_rules","criterion_max_score":10,"nominal_max_score":data.MAX_SCORE},"rule_statuses":["PASS","PARTIAL","FAIL","NOT_APPLICABLE","NOT_CHECKED"],"evidence_rules":{"validate_quotes":True,"allow_verified_absence":True},"limitations":data.LIMITATIONS,"report_configuration":{"title":data.REPORT_TITLE,"disclaimer":data.DISCLAIMER,"optional_result_title":data.RESULT_TITLE}}))
@@ -14,7 +21,8 @@ def upgrade_academic_methodology(bind, data):
         bind.execute(criteria.insert().values(id=cid,methodology_id=data.METHODOLOGY_ID,number=item["number"],title=item["title"],description=item["description"],weight=None,max_score=10,required=True,configuration={"score_from":"checked_applicable_rules"},order_index=item["order_index"],is_demo=False,source=data.SOURCE,version=data.VERSION))
         bind.execute(indicators.insert(),[{"id":r["id"],"criterion_id":cid,"title":r["title"],"description":r["description"],"expected_result":r["expected_result"],"weight":1.0,"order_index":i,"required":r["configuration"]["normative_strength"]=="REQUIRED","configuration":{"rule_code":r["code"],**r["configuration"]},"is_demo":False,"source":data.SOURCE,"version":data.VERSION} for i,r in enumerate(item["rules"],1)])
     agents=sa.table("methodology_agents",*[sa.column(n,sa.JSON if n=="configuration" else None) for n in ("id","methodology_id","code","name","version","stage_code","execution_order","execution_mode","model_role","prompt_template_id","input_schema_code","output_schema_code","is_active","is_required","source","is_demo","configuration")])
-    bind.execute(agents.insert(),[{"id":aid,"methodology_id":data.METHODOLOGY_ID,"code":code,"name":name,"version":data.VERSION,"stage_code":stage,"execution_order":order,"execution_mode":mode,"model_role":role,"prompt_template_id":f"{data.SLUG}-1-0-final-prompt" if stage=="final" else f"{data.SLUG}-1-0-thematic-prompt","input_schema_code":"rule_result_package" if stage=="final" else f"{data.PROFILE}_context","output_schema_code":"rule_based_final_output" if stage=="final" else "rule_based_agent_output","is_active":True,"is_required":True,"source":data.SOURCE,"is_demo":False,"configuration":{"criteria":assigned.split(",")}} for aid,code,name,stage,order,mode,role,assigned in data.AGENTS])
+    prompt_ids={item["stage"]:item["id"] for item in data.PROMPTS}
+    bind.execute(agents.insert(),[{"id":aid,"methodology_id":data.METHODOLOGY_ID,"code":code,"name":name,"version":data.VERSION,"stage_code":stage,"execution_order":order,"execution_mode":mode,"model_role":role,"prompt_template_id":prompt_ids["final_expert" if stage=="final" else "thematic"],"input_schema_code":"rule_result_package" if stage=="final" else f"{data.PROFILE}_context","output_schema_code":"rule_based_final_output" if stage=="final" else "rule_based_agent_output","is_active":True,"is_required":True,"source":data.SOURCE,"is_demo":False,"configuration":{"criteria":assigned.split(",")}} for aid,code,name,stage,order,mode,role,assigned in data.AGENTS])
 
 
 def downgrade_academic_methodology(bind, data):

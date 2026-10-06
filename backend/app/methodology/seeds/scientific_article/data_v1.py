@@ -91,7 +91,7 @@ CRITERIA = [
 ]
 
 PROMPTS = [
-    {"id": "scientific-article-1-0-thematic-prompt", "stage": "thematic", "version": VERSION,
+    {"id": "scientific-article-1-0-thematic", "stage": "thematic", "version": VERSION,
      "system_prompt": "Ты тематический аналитик научной статьи. Следуй только переданным rules внутренней методологии Digital Mentor. Не требуй IMRAD и не называй оценку официальной. Не придумывай цитаты. Отсутствие элемента отмечай FAIL только при подтверждённом поиске в переданном контексте и verification_basis THEMATIC_SEARCH_NOT_FOUND или DETERMINISTIC_CHECK; иначе NOT_CHECKED. Рекомендации должны быть конкретными и связанными с finding.",
      "user_template": "Проверь назначенные rules по тематическому контексту.", "source": SOURCE},
     {"id": "scientific-article-1-0-final-prompt", "stage": "final_expert", "version": VERSION,

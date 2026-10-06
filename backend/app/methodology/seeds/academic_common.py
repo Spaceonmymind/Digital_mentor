@@ -3,6 +3,14 @@ from sqlalchemy import select
 from app.methodology.models import Methodology, MethodologyAgent, MethodologyCriterion, MethodologyIndicator, PromptTemplate, WorkType
 from app.methodology.registry import WORK_TYPE_BY_CODE
 
+IDENTIFIER_MAX_LENGTH = 36
+
+
+def validate_persisted_identifier(value: str, field: str) -> str:
+    if len(value) > IDENTIFIER_MAX_LENGTH:
+        raise ValueError(f"{field} exceeds VARCHAR({IDENTIFIER_MAX_LENGTH}): length={len(value)}")
+    return value
+
 
 def internal_rule(prefix, index, title, strength="REQUIRED", applicability="always", capability="TEXT"):
     code = f"{prefix}.R{index:02d}"
@@ -25,6 +33,7 @@ def normative_rule(prefix, index, title, section, pages, strength="REQUIRED", ap
 
 
 async def ensure_academic_seed(session, data):
+    validate_persisted_identifier(data.METHODOLOGY_ID, "methodologies.id")
     definition = WORK_TYPE_BY_CODE[data.WORK_TYPE]
     wt = await session.get(WorkType, definition.code) or WorkType(code=definition.code)
     wt.display_name, wt.sort_order, wt.description, wt.status, wt.configuration = definition.display_name, definition.sort_order, data.DESCRIPTION, "AVAILABLE", {}
@@ -45,12 +54,14 @@ async def ensure_academic_seed(session, data):
     session.add(methodology); await session.flush()
     prompt_ids = {}
     for item in data.PROMPTS:
+        validate_persisted_identifier(item["id"], "prompt_templates.id")
         prompt = await session.get(PromptTemplate, item["id"]) or PromptTemplate(id=item["id"], methodology_id=methodology.id)
         prompt.stage, prompt.system_prompt, prompt.user_template = item["stage"], item["system_prompt"], item["user_template"]
         prompt.version, prompt.is_demo, prompt.source = item["version"], False, data.SOURCE
         session.add(prompt); prompt_ids[item["stage"]] = prompt.id
     for item in data.CRITERIA:
         cid = f"{data.SLUG}-1-0-{item['number'].lower()}"
+        validate_persisted_identifier(cid, "methodology_criteria.id")
         criterion = await session.get(MethodologyCriterion, cid) or MethodologyCriterion(id=cid, methodology_id=methodology.id)
         criterion.number, criterion.title, criterion.description = item["number"], item["title"], item["description"]
         criterion.weight, criterion.max_score, criterion.required = None, 10, True
@@ -58,6 +69,7 @@ async def ensure_academic_seed(session, data):
         criterion.is_demo, criterion.source, criterion.version = False, data.SOURCE, data.VERSION
         session.add(criterion)
         for order, rule in enumerate(item["rules"], 1):
+            validate_persisted_identifier(rule["id"], "methodology_indicators.id")
             indicator = await session.get(MethodologyIndicator, rule["id"]) or MethodologyIndicator(id=rule["id"], criterion_id=criterion.id)
             indicator.title, indicator.description, indicator.expected_result = rule["title"], rule["description"], rule["expected_result"]
             indicator.weight, indicator.order_index = 1.0, order
@@ -66,6 +78,7 @@ async def ensure_academic_seed(session, data):
             indicator.is_demo, indicator.source, indicator.version = False, data.SOURCE, data.VERSION
             session.add(indicator)
     for aid, code, name, stage, order, mode, role, assigned in data.AGENTS:
+        validate_persisted_identifier(aid, "methodology_agents.id")
         agent = await session.get(MethodologyAgent, aid) or MethodologyAgent(id=aid, methodology_id=methodology.id)
         agent.code, agent.name, agent.version = code, name, data.VERSION
         agent.stage_code, agent.execution_order, agent.execution_mode, agent.model_role = stage, order, mode, role

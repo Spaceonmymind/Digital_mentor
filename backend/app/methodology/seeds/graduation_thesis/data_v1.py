@@ -95,7 +95,7 @@ CRITERIA = [
 ]
 
 PROMPTS = [
-    {"id": "graduation-thesis-1-0-thematic-prompt", "stage": "thematic", "version": VERSION, "source": SOURCE,
+    {"id": "graduation-thesis-1-0-thematic", "stage": "thematic", "version": VERSION, "source": SOURCE,
      "system_prompt": "Ты тематический аналитик ВКР по внутренней методологии Digital Mentor. Проверяй только назначенные rules. Не придумывай цитаты и не выдавай внутреннюю оценку за нормативную. Собственный результат формулируй только как представленный в тексте результат автора. FAIL об отсутствии допустим только с THEMATIC_SEARCH_NOT_FOUND или DETERMINISTIC_CHECK и searched_context; иначе NOT_CHECKED. CONDITIONAL применяется только при подтверждённой applicability.",
      "user_template": "Проверь назначенные параметры по ограниченному тематическому контексту."},
     {"id": "graduation-thesis-1-0-final-prompt", "stage": "final_expert", "version": VERSION, "source": SOURCE,

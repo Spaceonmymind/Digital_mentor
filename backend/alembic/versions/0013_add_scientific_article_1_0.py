@@ -59,7 +59,7 @@ def upgrade() -> None:
     bind.execute(agents.insert(), [{"id": agent_id, "methodology_id": data_v1.METHODOLOGY_ID, "code": code,
         "name": name, "version": data_v1.VERSION, "stage_code": stage, "execution_order": order,
         "execution_mode": mode, "model_role": role,
-        "prompt_template_id": "scientific-article-1-0-final-prompt" if stage == "final" else "scientific-article-1-0-thematic-prompt",
+        "prompt_template_id": "scientific-article-1-0-final-prompt" if stage == "final" else "scientific-article-1-0-thematic",
         "input_schema_code": "rule_result_package" if stage == "final" else "scientific_article_context",
         "output_schema_code": "rule_based_final_output" if stage == "final" else "rule_based_agent_output",
         "is_active": True, "is_required": True, "source": data_v1.SOURCE, "is_demo": False,
