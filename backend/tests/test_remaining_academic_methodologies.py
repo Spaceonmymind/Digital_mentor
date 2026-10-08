@@ -75,7 +75,7 @@ async def test_catalog_registration_sources_dispatch_and_reports(client,data,ens
 
 
 class FakeClient:
-    def __init__(self): self.active=0; self.max_active=0; self.final_prompt=""; self.response_models=[]; self.token_limits=[]
+    def __init__(self): self.active=0; self.max_active=0; self.final_prompt=""; self.response_models=[]; self.token_limits=[]; self.rule_batch_sizes=[]
     async def ask(self,model,system_prompt,user_prompt,response_model,**kwargs):
         self.response_models.append(response_model); self.token_limits.append(kwargs.get("max_completion_tokens"))
         self.active+=1; self.max_active=max(self.max_active,self.active); await asyncio.sleep(.002); self.active-=1
@@ -83,6 +83,7 @@ class FakeClient:
             self.final_prompt=user_prompt; output=CandidateFinalOutput(summary="Предварительный анализ завершён.",represented_result="В тексте представлен проверяемый результат.")
         else:
             raw=user_prompt.split("Назначенные rules:\n",1)[1].split("\n\nНедоверенный",1)[0]; rules=json.loads(raw); results=[]
+            self.rule_batch_sizes.append(len(rules))
             for rule in rules:
                 results.append(RuleCheckResult(rule_code=rule["rule_code"],criterion_code=rule["rule_code"].split(".")[0],title=rule["title"],status="NOT_CHECKED",finding="Недостаточно контекста.",verification_basis="INSUFFICIENT_CONTEXT",capability=rule["capability"],normative_strength=rule["normative_strength"]))
             output=CandidateAgentOutput(criterion_code=",".join(sorted({r["rule_code"].split(".")[0] for r in rules})),summary="x",rule_results=results)
@@ -106,6 +107,7 @@ async def test_parallel_compact_routing_optional_block_and_pdf(tmp_path,data,ens
     assert fake.max_active>=4 and "<document>" not in fake.final_prompt and len(fake.final_prompt)<50000
     assert all(model is CompactAcademicAgentOutput for model in fake.response_models[:-1])
     assert fake.token_limits[:-1] and set(fake.token_limits[:-1]) == {3200}
+    assert fake.rule_batch_sizes and max(fake.rule_batch_sizes) <= 8
     assert report["represented_result"]["title"]==data.RESULT_TITLE
     assert result.extra_blocks["nominal_score_max"]==data.MAX_SCORE
     assert result.extra_blocks["total_score_max"]==0 and result.extra_blocks["coverage"]==0

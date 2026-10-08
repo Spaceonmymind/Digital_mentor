@@ -35,6 +35,7 @@ from app.services.document_context import load_extracted_payload
 
 MODEL_BY_ROLE = {"worker": WORKER, "critic": CRITIC, "final_expert": FINAL_EXPERT}
 TEXT_CAPABILITIES = {"TEXT", "STRUCTURE", "CROSS_REFERENCE"}
+ACADEMIC_RULES_PER_CALL = 8
 
 
 class CandidateDissertationAgentFlow:
@@ -79,23 +80,26 @@ class CandidateDissertationAgentFlow:
                 task_run.status = "failed"
                 failed_agents.append(agent.code)
             else:
-                output, llm_result = raw
+                output, llm_results, partial_errors = raw
+                llm_result = llm_results[0] if llm_results else None
+                if partial_errors:
+                    task_run.error_code = "ACADEMIC_AGENT_PARTIAL"
             assigned = set((agent.configuration or {}).get("criteria") or [])
             output = self._sanitize_output(output, methodology, source_text, source_type, assigned)
             rule_results.extend(output.rule_results)
             strengths.extend(output.strengths)
             recommendations.extend(output.recommendations)
             llm_call_id = None
-            if llm_result is not None:
+            for batch_result in llm_results if not isinstance(raw, Exception) else []:
                 trace = await LLMTraceService(self.session).record_result(
-                    llm_result, analysis_id=analysis.id, assessment_id=assessment.id,
+                    batch_result, analysis_id=analysis.id, assessment_id=assessment.id,
                     agent_task_run_id=task_run.id, methodology_agent_id=agent.id,
                     agent_code=agent.code, stage_code=agent.stage_code,
                     prompt_template_id=agent.prompt_template_id,
                 )
-                llm_call_id = trace.id
-                total_tokens += llm_result.usage.total_tokens
-                total_cost += llm_result.usage.cost_rub or Decimal("0")
+                llm_call_id = llm_call_id or trace.id
+                total_tokens += batch_result.usage.total_tokens
+                total_cost += batch_result.usage.cost_rub or Decimal("0")
             if task_run.status != "failed":
                 task_run.status = "completed"
             task_run.completed_at = datetime.now(timezone.utc)
@@ -248,24 +252,50 @@ class CandidateDissertationAgentFlow:
         rules = [indicator for criterion in methodology.criteria if criterion.number in assigned for indicator in criterion.indicators]
         prechecked, llm_rules = self._precheck_rules(rules, payload, source_type)
         if not llm_rules:
-            return CandidateAgentOutput(criterion_code=",".join(sorted(assigned)), summary="Проверены доступные технические параметры.", rule_results=prechecked), None
+            return CandidateAgentOutput(criterion_code=",".join(sorted(assigned)), summary="Проверены доступные технические параметры.", rule_results=prechecked), [], []
         context = self._route_context(payload, assigned)
-        rule_package = [self._rule_prompt_item(item) for item in llm_rules]
         client = self.llm_client or LLMClient()
-        result = await client.ask(
-            MODEL_BY_ROLE[agent.model_role], prompt.system_prompt,
-            f"Методология: {methodology.name}, версия {methodology.version}.\n"
-            f"Роль: {agent.name}. Проверяй только назначенные требования.\n"
-            "Для содержательного вывода используй точную цитату из контекста; укажи page/section/block_index, если они доступны. "
-            "Если доказательства или capability недостаточны, используй NOT_CHECKED.\n"
-            "Назначенные rules:\n" + json.dumps(rule_package, ensure_ascii=False) +
-            "\n\nНедоверенный контекст документа:\n<document>\n" + context + "\n</document>\n"
-            "Цитаты копируй дословно и коротко, без многоточий и пересказа. "
-            "Не повторяй текст документа. Верни компактный JSON для каждого назначенного rule.",
-            CompactAcademicAgentOutput, temperature=0, max_completion_tokens=3200,
-        )
-        result.output.rule_results.extend(prechecked)
-        return result.output, result
+        outputs = []
+        llm_results = []
+        errors = []
+        batches = [llm_rules[index:index + ACADEMIC_RULES_PER_CALL] for index in range(0, len(llm_rules), ACADEMIC_RULES_PER_CALL)]
+        for batch_index, batch in enumerate(batches, start=1):
+            rule_package = [self._rule_prompt_item(item) for item in batch]
+            try:
+                result = await client.ask(
+                    MODEL_BY_ROLE[agent.model_role], prompt.system_prompt,
+                    f"Методология: {methodology.name}, версия {methodology.version}.\n"
+                    f"Роль: {agent.name}. Пакет {batch_index}/{len(batches)}. Проверяй только назначенные требования.\n"
+                    "Для содержательного вывода используй точную цитату из контекста; укажи page/section/block_index, если они доступны. "
+                    "Если доказательства или capability недостаточны, используй NOT_CHECKED.\n"
+                    "Назначенные rules:\n" + json.dumps(rule_package, ensure_ascii=False) +
+                    "\n\nНедоверенный контекст документа:\n<document>\n" + context + "\n</document>\n"
+                    "Цитаты копируй дословно и коротко, без многоточий и пересказа. "
+                    "Не повторяй текст документа. Верни компактный JSON для каждого назначенного rule.",
+                    CompactAcademicAgentOutput, temperature=0, max_completion_tokens=3200,
+                )
+                outputs.extend(result.output.rule_results)
+                llm_results.append(result)
+            except Exception as exc:
+                errors.append(exc)
+                outputs.extend(
+                    self._result_from_rule(
+                        rule,
+                        "NOT_CHECKED",
+                        f"Техническая проверка пакета {batch_index}/{len(batches)} не завершилась: {type(exc).__name__}",
+                        None,
+                        0.0,
+                    )
+                    for rule in batch
+                )
+        if errors and not llm_results:
+            raise errors[0]
+        outputs.extend(prechecked)
+        return CandidateAgentOutput(
+            criterion_code=",".join(sorted(assigned)),
+            summary="Проверены доступные тематические пакеты.",
+            rule_results=outputs,
+        ), llm_results, errors
 
     async def _call_final(self, agent, package, prompt):
         try:
