@@ -1,11 +1,13 @@
 import asyncio
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from hashlib import sha256
 from pathlib import Path
 
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -36,6 +38,17 @@ from app.services.document_context import load_extracted_payload
 MODEL_BY_ROLE = {"worker": WORKER, "critic": CRITIC, "final_expert": FINAL_EXPERT}
 TEXT_CAPABILITIES = {"TEXT", "STRUCTURE", "CROSS_REFERENCE"}
 ACADEMIC_RULES_PER_CALL = 8
+logger = logging.getLogger(__name__)
+
+
+class AcademicThematicOutput(BaseModel):
+    """Internal unvalidated envelope used before server-side rule enrichment."""
+
+    criterion_code: str
+    summary: str
+    rule_results: list
+    strengths: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
 
 
 class CandidateDissertationAgentFlow:
@@ -75,7 +88,8 @@ class CandidateDissertationAgentFlow:
             if isinstance(raw, Exception):
                 reason = f"Техническая проверка агентом {agent.code} не завершилась: {type(raw).__name__}"
                 output = self._not_checked_output(agent, methodology, source_type, reason)
-                llm_result = None
+                llm_results = []
+                partial_errors = [raw]
                 task_run.error_code = "CANDIDATE_AGENT_FALLBACK"
                 task_run.status = "failed"
                 failed_agents.append(agent.code)
@@ -90,7 +104,7 @@ class CandidateDissertationAgentFlow:
             strengths.extend(output.strengths)
             recommendations.extend(output.recommendations)
             llm_call_id = None
-            for batch_result in llm_results if not isinstance(raw, Exception) else []:
+            for batch_result in llm_results:
                 trace = await LLMTraceService(self.session).record_result(
                     batch_result, analysis_id=analysis.id, assessment_id=assessment.id,
                     agent_task_run_id=task_run.id, methodology_agent_id=agent.id,
@@ -261,9 +275,11 @@ class CandidateDissertationAgentFlow:
         batches = [llm_rules[index:index + ACADEMIC_RULES_PER_CALL] for index in range(0, len(llm_rules), ACADEMIC_RULES_PER_CALL)]
         for batch_index, batch in enumerate(batches, start=1):
             rule_package = [self._rule_prompt_item(item) for item in batch]
-            try:
-                result = await client.ask(
-                    MODEL_BY_ROLE[agent.model_role], prompt.system_prompt,
+            primary_model = MODEL_BY_ROLE[agent.model_role]
+
+            async def ask_batch(model):
+                return await client.ask(
+                    model, prompt.system_prompt,
                     f"Методология: {methodology.name}, версия {methodology.version}.\n"
                     f"Роль: {agent.name}. Пакет {batch_index}/{len(batches)}. Проверяй только назначенные требования.\n"
                     "Для содержательного вывода используй точную цитату из контекста; укажи page/section/block_index, если они доступны. "
@@ -274,9 +290,24 @@ class CandidateDissertationAgentFlow:
                     "Не повторяй текст документа. Верни компактный JSON для каждого назначенного rule.",
                     CompactAcademicAgentOutput, temperature=0, max_completion_tokens=3200,
                 )
+
+            try:
+                result = await ask_batch(primary_model)
                 outputs.extend(result.output.rule_results)
                 llm_results.append(result)
             except Exception as exc:
+                if primary_model == CRITIC:
+                    try:
+                        logger.warning(
+                            "academic_agent_model_fallback agent_code=%s batch=%s/%s from_model=%s to_model=%s reason=%s",
+                            agent.code, batch_index, len(batches), CRITIC, WORKER, type(exc).__name__,
+                        )
+                        result = await ask_batch(WORKER)
+                        outputs.extend(result.output.rule_results)
+                        llm_results.append(result)
+                        continue
+                    except Exception as fallback_exc:
+                        exc = fallback_exc
                 errors.append(exc)
                 outputs.extend(
                     self._result_from_rule(
@@ -291,7 +322,7 @@ class CandidateDissertationAgentFlow:
         if errors and not llm_results:
             raise errors[0]
         outputs.extend(prechecked)
-        return CandidateAgentOutput(
+        return AcademicThematicOutput(
             criterion_code=",".join(sorted(assigned)),
             summary="Проверены доступные тематические пакеты.",
             rule_results=outputs,

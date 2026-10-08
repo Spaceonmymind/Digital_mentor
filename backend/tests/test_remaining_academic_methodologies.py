@@ -14,8 +14,15 @@ from app.execution.dissertation_abstract import DissertationAbstractAgentFlow, D
 from app.execution.doctoral_dissertation import DoctoralDissertationAgentFlow, DoctoralDissertationAnalysisEngine
 from app.execution.internship_report import InternshipReportAgentFlow, InternshipReportAnalysisEngine
 from app.execution.research_report import ResearchReportAgentFlow, ResearchReportAnalysisEngine
-from app.execution.rule_schemas import CandidateAgentOutput, CandidateFinalOutput, CompactAcademicAgentOutput, RuleCheckResult, RuleEvidence
+from app.execution.rule_schemas import (
+    CandidateFinalOutput,
+    CompactAcademicAgentOutput,
+    CompactRuleCheck,
+    RuleCheckResult,
+    RuleEvidence,
+)
 from app.llm.schemas import LLMResult, LLMUsage
+from app.llm.registry import CRITIC, WORKER
 from app.methodology.models import Methodology, MethodologyCriterion, WorkType
 from app.methodology.registry import MethodologyRegistry
 from app.methodology.repository import MethodologyRepository
@@ -85,9 +92,52 @@ class FakeClient:
             raw=user_prompt.split("Назначенные rules:\n",1)[1].split("\n\nНедоверенный",1)[0]; rules=json.loads(raw); results=[]
             self.rule_batch_sizes.append(len(rules))
             for rule in rules:
-                results.append(RuleCheckResult(rule_code=rule["rule_code"],criterion_code=rule["rule_code"].split(".")[0],title=rule["title"],status="NOT_CHECKED",finding="Недостаточно контекста.",verification_basis="INSUFFICIENT_CONTEXT",capability=rule["capability"],normative_strength=rule["normative_strength"]))
-            output=CandidateAgentOutput(criterion_code=",".join(sorted({r["rule_code"].split(".")[0] for r in rules})),summary="x",rule_results=results)
+                results.append(CompactRuleCheck(
+                    rule_code=rule["rule_code"],
+                    status="NOT_CHECKED",
+                    finding="Недостаточно контекста.",
+                    verification_basis="INSUFFICIENT_CONTEXT",
+                ))
+            output=CompactAcademicAgentOutput(
+                criterion_code=",".join(sorted({r["rule_code"].split(".")[0] for r in rules})),
+                summary="x",
+                rule_results=results,
+            )
         return LLMResult(output=output,requested_model=model,actual_model=model,aggregator="fake",provider="fake",temperature=0,max_completion_tokens=kwargs.get("max_completion_tokens"),usage=LLMUsage(),latency_ms=2)
+
+
+class CriticFallbackClient(FakeClient):
+    def __init__(self):
+        super().__init__()
+        self.models = []
+
+    async def ask(self, model, system_prompt, user_prompt, response_model, **kwargs):
+        self.models.append(model)
+        if model == CRITIC:
+            raise RuntimeError("critic provider unavailable")
+        return await super().ask(model, system_prompt, user_prompt, response_model, **kwargs)
+
+
+@pytest.mark.asyncio
+async def test_critic_batch_falls_back_once_to_worker_without_losing_results():
+    fake = CriticFallbackClient()
+    async with async_session_factory() as session:
+        seeded = await ensure_course_paper_seed(session)
+        methodology = await CoursePaperAgentFlow(session, fake)._methodology(seeded.id)
+        agent = next(item for item in methodology.agents if item.model_role == "critic")
+        prompt = next(item for item in methodology.prompts if item.id == agent.prompt_template_id)
+        output, llm_results, errors = await CoursePaperAgentFlow(session, fake)._call_thematic(
+            agent,
+            methodology,
+            {"full_text": "Цель, методы, результаты и выводы.", "paragraphs": [{"paragraph_index": 1, "text": "Цель, методы, результаты и выводы."}]},
+            "docx",
+            prompt,
+        )
+
+    assert fake.models and all(model == CRITIC for model in fake.models[::2])
+    assert all(model == WORKER for model in fake.models[1::2])
+    assert llm_results and not errors
+    assert output.rule_results
 
 
 @pytest.mark.asyncio
