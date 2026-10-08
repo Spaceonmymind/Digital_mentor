@@ -63,6 +63,32 @@ const state = {
   elapsedTimer: null,
 };
 
+const BUILTIN_METHODOLOGY_CATALOG = [
+  ["STARTUP_VKR", "ВКР в виде стартапа", "STARTUP_VKR", "2.0", 60],
+  ["COURSE_WORK", "Курсовая работа", "COURSE_PAPER", "1.0", 50],
+  ["BACHELOR_SPECIALIST_THESIS", "ВКР бакалавра / специалиста", "GRADUATION_THESIS", "1.0", 60],
+  ["MASTER_THESIS", "Магистерская диссертация", "MASTER_DISSERTATION", "1.0", 60],
+  ["PRACTICE_REPORT", "Отчёт по практике", "INTERNSHIP_REPORT", "1.0", 50],
+  ["RESEARCH_REPORT", "Отчёт по НИР", "RESEARCH_REPORT", "1.0", 60],
+  ["SCIENTIFIC_ARTICLE", "Научная статья", "SCIENTIFIC_ARTICLE", "1.0", 60],
+  ["CANDIDATE_DISSERTATION", "Кандидатская диссертация", "CANDIDATE_DISSERTATION", "1.0", 70],
+  ["DOCTORAL_DISSERTATION", "Докторская диссертация", "DOCTORAL_DISSERTATION", "1.0", 70],
+  ["DISSERTATION_ABSTRACT", "Автореферат диссертации", "DISSERTATION_ABSTRACT", "1.0", 60],
+].map(([workType, displayName, methodologyId, version, maxScore]) => ({
+  work_type: workType,
+  display_name: displayName,
+  description: `Предварительный анализ: ${displayName.toLowerCase()}.`,
+  availability: "AVAILABLE",
+  active_version: version,
+  max_score: maxScore,
+  active_methodology: {
+    methodology_id: methodologyId,
+    name: displayName,
+    version,
+    max_score: maxScore,
+  },
+}));
+
 const elements = {
   appShell: document.getElementById("appShell"),
   sidebarToggle: document.getElementById("sidebarToggle"),
@@ -496,8 +522,11 @@ function renderWorkTypeSelection() {
     .map((item) => `<option value="${item.work_type}">${item.display_name}${item.availability === "AVAILABLE" ? "" : " — скоро"}</option>`)
     .join("");
   const preferred = state.workTypes.find((item) => item.work_type === "STARTUP_VKR") || state.workTypes[0];
-  if (!state.selectedWorkType && preferred) state.selectedWorkType = preferred.work_type;
+  if (!state.workTypes.some((item) => item.work_type === state.selectedWorkType)) {
+    state.selectedWorkType = preferred?.work_type || null;
+  }
   elements.workTypeSelect.value = state.selectedWorkType || "";
+  elements.workTypeSelect.disabled = !state.workTypes.length;
   renderSelectedMethodology();
 }
 
@@ -515,12 +544,19 @@ function renderSelectedMethodology() {
 
 async function loadMethodologyCatalog() {
   try {
-    state.workTypes = await getMethodologies();
+    const catalog = await getMethodologies();
+    if (!Array.isArray(catalog) || !catalog.length) throw new Error("Каталог методологий пуст");
+    state.workTypes = catalog;
+    window.localStorage.setItem("DIGITAL_MENTOR_METHODOLOGY_CATALOG", JSON.stringify(catalog));
   } catch (error) {
-    state.workTypes = FRONTEND_MOCK_MODE
-      ? [{ work_type: "STARTUP_VKR", display_name: "ВКР в виде стартапа", availability: "AVAILABLE", active_version: "2.0", active_methodology: { methodology_id: "STARTUP_VKR", name: "ВКР в виде стартапа", version: "2.0", max_score: 60 } }]
-      : [];
-    if (!state.workTypes.length) showNotification(error.message || "Не удалось загрузить каталог методологий.");
+    let cached = [];
+    try {
+      cached = JSON.parse(window.localStorage.getItem("DIGITAL_MENTOR_METHODOLOGY_CATALOG") || "[]");
+    } catch (_) {
+      cached = [];
+    }
+    state.workTypes = Array.isArray(cached) && cached.length ? cached : BUILTIN_METHODOLOGY_CATALOG;
+    showNotification("Каталог загружен в резервном режиме. Доступность будет проверена при запуске анализа.");
   }
   renderWorkTypeSelection();
 }

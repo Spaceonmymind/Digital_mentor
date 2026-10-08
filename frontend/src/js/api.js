@@ -34,7 +34,7 @@ export async function getPublicConfig() {
 }
 
 export async function getMethodologies() {
-  const response = await fetch(`${API_BASE_URL}/methodologies`);
+  const response = await fetch(`${API_BASE_URL}/methodologies`, { cache: "no-store" });
   return parseResponse(response);
 }
 
