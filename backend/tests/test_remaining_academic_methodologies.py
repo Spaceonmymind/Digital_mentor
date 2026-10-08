@@ -14,7 +14,7 @@ from app.execution.dissertation_abstract import DissertationAbstractAgentFlow, D
 from app.execution.doctoral_dissertation import DoctoralDissertationAgentFlow, DoctoralDissertationAnalysisEngine
 from app.execution.internship_report import InternshipReportAgentFlow, InternshipReportAnalysisEngine
 from app.execution.research_report import ResearchReportAgentFlow, ResearchReportAnalysisEngine
-from app.execution.rule_schemas import CandidateAgentOutput, CandidateFinalOutput, RuleCheckResult, RuleEvidence
+from app.execution.rule_schemas import CandidateAgentOutput, CandidateFinalOutput, CompactAcademicAgentOutput, RuleCheckResult, RuleEvidence
 from app.llm.schemas import LLMResult, LLMUsage
 from app.methodology.models import Methodology, MethodologyCriterion, WorkType
 from app.methodology.registry import MethodologyRegistry
@@ -75,8 +75,9 @@ async def test_catalog_registration_sources_dispatch_and_reports(client,data,ens
 
 
 class FakeClient:
-    def __init__(self): self.active=0; self.max_active=0; self.final_prompt=""
+    def __init__(self): self.active=0; self.max_active=0; self.final_prompt=""; self.response_models=[]; self.token_limits=[]
     async def ask(self,model,system_prompt,user_prompt,response_model,**kwargs):
+        self.response_models.append(response_model); self.token_limits.append(kwargs.get("max_completion_tokens"))
         self.active+=1; self.max_active=max(self.max_active,self.active); await asyncio.sleep(.002); self.active-=1
         if response_model is CandidateFinalOutput:
             self.final_prompt=user_prompt; output=CandidateFinalOutput(summary="Предварительный анализ завершён.",represented_result="В тексте представлен проверяемый результат.")
@@ -103,6 +104,8 @@ async def test_parallel_compact_routing_optional_block_and_pdf(tmp_path,data,ens
         result=await flow(session,fake).execute(assessment,analysis,document); payload=result.model_dump(mode="json")
     report=result.extra_blocks["rule_based_report"]
     assert fake.max_active>=4 and "<document>" not in fake.final_prompt and len(fake.final_prompt)<50000
+    assert all(model is CompactAcademicAgentOutput for model in fake.response_models[:-1])
+    assert fake.token_limits[:-1] and set(fake.token_limits[:-1]) == {3200}
     assert report["represented_result"]["title"]==data.RESULT_TITLE
     assert result.extra_blocks["nominal_score_max"]==data.MAX_SCORE
     assert result.extra_blocks["total_score_max"]==0 and result.extra_blocks["coverage"]==0

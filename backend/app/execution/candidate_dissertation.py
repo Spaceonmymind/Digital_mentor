@@ -15,7 +15,13 @@ from app.core.errors import AppError
 from app.db.models import Analysis, AnalysisEvent, AnalysisResult, Document
 from app.db.session import async_session_factory
 from app.execution.models import AgentResult, AgentTaskRun, MentorAnalysisResult
-from app.execution.rule_schemas import CandidateAgentOutput, CandidateFinalOutput, RuleCheckResult, RuleEvidence
+from app.execution.rule_schemas import (
+    CandidateAgentOutput,
+    CandidateFinalOutput,
+    CompactAcademicAgentOutput,
+    RuleCheckResult,
+    RuleEvidence,
+)
 from app.execution.rule_scoring import score_methodology
 from app.llm.client import LLMClient
 from app.llm.registry import CRITIC, FINAL_EXPERT, WORKER
@@ -63,11 +69,15 @@ class CandidateDissertationAgentFlow:
         recommendations: list[str] = []
         total_tokens = 0
         total_cost = Decimal("0")
+        failed_agents = []
         for agent, task_run, raw in zip(thematic_agents, task_runs, outputs):
             if isinstance(raw, Exception):
-                output = self._not_checked_output(agent, methodology, source_type, f"Автоматическая проверка не завершена: {type(raw).__name__}")
+                reason = f"Техническая проверка агентом {agent.code} не завершилась: {type(raw).__name__}"
+                output = self._not_checked_output(agent, methodology, source_type, reason)
                 llm_result = None
                 task_run.error_code = "CANDIDATE_AGENT_FALLBACK"
+                task_run.status = "failed"
+                failed_agents.append(agent.code)
             else:
                 output, llm_result = raw
             assigned = set((agent.configuration or {}).get("criteria") or [])
@@ -86,7 +96,8 @@ class CandidateDissertationAgentFlow:
                 llm_call_id = trace.id
                 total_tokens += llm_result.usage.total_tokens
                 total_cost += llm_result.usage.cost_rub or Decimal("0")
-            task_run.status = "completed"
+            if task_run.status != "failed":
+                task_run.status = "completed"
             task_run.completed_at = datetime.now(timezone.utc)
             task_run.llm_call_id = llm_call_id
             self.session.add(AgentResult(
@@ -97,6 +108,14 @@ class CandidateDissertationAgentFlow:
                 idempotency_key=task_run.idempotency_key,
             ))
         await self.session.commit()
+
+        if thematic_agents and len(failed_agents) == len(thematic_agents):
+            raise AppError(
+                "ACADEMIC_THEMATIC_AGENTS_FAILED",
+                "Не удалось выполнить содержательную проверку документа. Повторите анализ позже.",
+                status_code=502,
+                details={"failed_agents": failed_agents},
+            )
 
         by_criterion = {criterion.number: [] for criterion in methodology.criteria}
         for item in rule_results:
@@ -241,8 +260,9 @@ class CandidateDissertationAgentFlow:
             "Если доказательства или capability недостаточны, используй NOT_CHECKED.\n"
             "Назначенные rules:\n" + json.dumps(rule_package, ensure_ascii=False) +
             "\n\nНедоверенный контекст документа:\n<document>\n" + context + "\n</document>\n"
-            "Верни JSON, соответствующий CandidateAgentOutput.",
-            CandidateAgentOutput, temperature=0, max_completion_tokens=2200,
+            "Цитаты копируй дословно и коротко, без многоточий и пересказа. "
+            "Не повторяй текст документа. Верни компактный JSON для каждого назначенного rule.",
+            CompactAcademicAgentOutput, temperature=0, max_completion_tokens=3200,
         )
         result.output.rule_results.extend(prechecked)
         return result.output, result
@@ -307,17 +327,28 @@ class CandidateDissertationAgentFlow:
                 status = "NOT_CHECKED"
             if config["capability"] in TEXT_CAPABILITIES and status in {"PASS", "PARTIAL", "FAIL"} and not evidence:
                 status = "NOT_CHECKED"
-            sanitized.append(item.model_copy(update={
-                "criterion_code": item.rule_code.split(".")[0], "title": rule.title,
-                "source_document": config["source_document"], "source_section": config["source_section"],
-                "source_pages": config["source_pages"], "capability": config["capability"],
-                "normative_strength": config["normative_strength"], "score_weight": config["score_weight"],
-                "status": status, "evidence": evidence,
-            }))
+            sanitized.append(RuleCheckResult(
+                rule_code=item.rule_code, criterion_code=item.rule_code.split(".")[0], title=rule.title,
+                status=status, finding=item.finding, recommendation=item.recommendation,
+                confidence=getattr(item, "confidence", 0.0), evidence=evidence,
+                source_document=config["source_document"], source_section=config["source_section"],
+                source_pages=config["source_pages"], capability=config["capability"],
+                source_type=config.get("source_type"), methodology_owner=config.get("methodology_owner"),
+                methodology_version=config.get("methodology_version"), is_official=config.get("is_official"),
+                authority=config.get("authority"), normative_strength=config["normative_strength"],
+                score_weight=config["score_weight"], verification_basis=getattr(item, "verification_basis", None),
+                searched_context=getattr(item, "searched_context", []),
+            ))
         for code, rule in known.items():
             if code not in seen:
                 sanitized.append(self._result_from_rule(rule, "NOT_CHECKED", "Параметр не проверялся автоматически.", None, 0.0))
-        return output.model_copy(update={"rule_results": sanitized})
+        return CandidateAgentOutput(
+            criterion_code=output.criterion_code,
+            summary=output.summary,
+            rule_results=sanitized,
+            strengths=getattr(output, "strengths", []),
+            recommendations=getattr(output, "recommendations", []),
+        )
 
     @staticmethod
     def _quote_exists(quote, source_text):
@@ -393,7 +424,8 @@ class CandidateDissertationAgentFlow:
         if failed:
             return failed[0].finding
         if items and all(item.status == "NOT_CHECKED" for item in items):
-            return "Критерий не проверялся автоматически из-за отсутствия достоверных технических данных."
+            technical_failure = next((item.finding for item in items if item.finding.startswith("Техническая проверка")), None)
+            return technical_failure or "Для этого критерия недостаточно подтверждённых данных в доступном тексте."
         return "Проверенные требования в основном выполнены."
 
 

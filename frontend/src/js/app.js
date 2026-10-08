@@ -731,13 +731,14 @@ function renderResults(result) {
         const preview = truncateToSentence(explanation || getScoreLevel(score), 220);
         const maxScore = criterionMaxScore || (normalized.isMentorReport ? 5 : 100);
         const wasChecked = score !== null && score !== undefined && maxScore;
+        const scoreText = wasChecked ? `${score}/${maxScore}` : "Не проверено";
         const scoreRatio = wasChecked ? score / maxScore : 0;
         const scoreLevel = scoreRatio <= 0.3 ? "Слабая проработка" : scoreRatio <= 0.6 ? "Требует доработки" : scoreRatio <= 0.8 ? "Хорошо" : "Очень хорошо";
         return `
         <div class="criterion">
           <div class="criterion__head">
             <span>${normalized.isDemoReport && code ? `${code}. ` : ""}${title}</span>
-            <strong>${wasChecked ? `${score}/${maxScore}` : "Не проверялось автоматически"}</strong>
+            <strong class="${wasChecked ? "" : "criterion__not-checked"}" title="${wasChecked ? scoreTooltip(score, maxScore) : "Недостаточно подтверждённых данных для автоматической оценки"}">${scoreText}</strong>
           </div>
           <small>${preview}</small>
           ${normalized.isDemoReport ? `<div class="criterion__signals">
@@ -851,7 +852,7 @@ function renderCandidateChecks(report) {
   elements.candidateCoverage.textContent = `Проверено ${coverage}% применимых обязательных правил. Оценка: ${state.result.overall_score}/${report.evaluated_max_score}; номинальная шкала — ${report.nominal_max_score}.`;
   const capabilityLabels = { TEXT: "Содержание текста", STRUCTURE: "Структура документа", CROSS_REFERENCE: "Связи между разделами и ссылками", DOCX_FORMATTING: "Доступные параметры DOCX" };
   elements.candidateCheckedList.innerHTML = (report.checked_capabilities || []).map((item) => `<li>${capabilityLabels[item] || "Доступная автоматическая проверка"}</li>`).join("") || "<li>Нет достоверно проверенных параметров.</li>";
-  elements.candidateNotCheckedList.innerHTML = (report.not_checked || []).map((item) => `<li><strong>${item.title}</strong>: Не проверялось автоматически</li>`).join("") || "<li>Все применимые параметры проверены.</li>";
+  elements.candidateNotCheckedList.innerHTML = (report.not_checked || []).map((item) => `<li><strong>${item.title}</strong><span>${item.finding || "Недостаточно подтверждённых данных для автоматической оценки."}</span></li>`).join("") || "<li>Все применимые параметры проверены.</li>";
   const statusLabels = { PASS: "Выполнено", PARTIAL: "Выполнено частично", FAIL: "Требует исправления", NOT_APPLICABLE: "Не применимо", NOT_CHECKED: "Не проверялось автоматически" };
   elements.candidateRuleList.innerHTML = (report.rule_checks || []).map((item) => {
     const evidence = (item.evidence || []).map((entry) => `<blockquote>${entry.quote || ""}</blockquote>`).join("");
@@ -992,6 +993,10 @@ function renderSummary(result) {
 function renderList(container, items) {
   const isStrength = ["strengthsList", "summaryStrengths"].includes(container.id);
   const icon = isStrength ? "✓" : "!";
+  if (!items.length) {
+    container.innerHTML = `<li class="report-list-item is-neutral"><span class="report-list-item__icon" aria-hidden="true">—</span><span class="report-list-item__text">${isStrength ? "Подтверждённые сильные стороны пока не выделены." : "Замечания по доступным данным не сформированы."}</span></li>`;
+    return;
+  }
   container.innerHTML = items.map((item) => `
     <li class="report-list-item ${isStrength ? "is-positive" : "is-warning"}">
       <span class="report-list-item__icon" aria-hidden="true">${icon}</span>

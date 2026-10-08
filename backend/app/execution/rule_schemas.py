@@ -55,6 +55,30 @@ class CandidateAgentOutput(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
 
 
+class CompactRuleCheck(BaseModel):
+    """Provider-facing rule result; methodology metadata is restored server-side."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rule_code: str
+    status: RuleStatus
+    finding: str
+    recommendation: str | None = None
+    evidence: list[RuleEvidence] = Field(default_factory=list)
+    verification_basis: VerificationBasis | None = None
+    searched_context: list[str] = Field(default_factory=list)
+
+
+class CompactAcademicAgentOutput(BaseModel):
+    """Small structured response used by thematic academic agents."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    criterion_code: str
+    summary: str
+    rule_results: list[CompactRuleCheck]
+
+
 class CandidateFinalOutput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

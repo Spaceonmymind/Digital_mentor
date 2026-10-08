@@ -5218,3 +5218,146 @@ body.is-modal-open {
 @media (max-width: 760px) {
   .candidate-checks__columns { grid-template-columns: 1fr; }
 }
+
+/* Academic report layout and work-type control safeguards. */
+.work-type-field {
+  position: relative;
+  padding: 20px 22px;
+  border-color: rgba(37, 101, 105, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(0, 152, 175, 0.10), transparent 38%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 248, 249, 0.92));
+  box-shadow: 0 14px 34px rgba(20, 71, 77, 0.08);
+}
+
+.work-type-field label {
+  margin-bottom: 10px;
+  color: #17474d;
+  font-size: 13px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.work-type-field select {
+  min-height: 58px;
+  appearance: none;
+  padding: 0 58px 0 18px;
+  border: 1px solid rgba(37, 101, 105, 0.25);
+  border-radius: 16px;
+  color: #163f45;
+  background:
+    linear-gradient(45deg, transparent 50%, #256569 50%) calc(100% - 24px) 25px / 7px 7px no-repeat,
+    linear-gradient(135deg, #ffffff, #f8fcfc);
+  box-shadow: inset 0 0 0 3px rgba(37, 101, 105, 0.05), 0 8px 20px rgba(20, 71, 77, 0.06);
+  font-size: 17px;
+  font-weight: 750;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.work-type-field select:hover {
+  border-color: rgba(0, 152, 175, 0.55);
+  box-shadow: inset 0 0 0 3px rgba(0, 152, 175, 0.06), 0 12px 28px rgba(20, 71, 77, 0.10);
+}
+
+.work-type-field select:focus-visible {
+  border-color: #168498;
+  outline: 3px solid rgba(0, 152, 175, 0.18);
+  outline-offset: 2px;
+}
+
+.work-type-field p {
+  margin-top: 11px;
+  padding-left: 12px;
+  border-left: 3px solid rgba(0, 152, 175, 0.45);
+  font-size: 14px;
+}
+
+#resultsStage .candidate-checks {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: clamp(26px, 2.5vw, 40px);
+  overflow: visible;
+}
+
+#resultsStage .candidate-checks__columns > div {
+  min-width: 0;
+}
+
+#resultsStage .candidate-checks__columns ul {
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+}
+
+#resultsStage .candidate-checks__columns li {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 101, 105, 0.10);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.82);
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+#resultsStage .candidate-checks__columns li strong,
+#resultsStage .candidate-checks__columns li span {
+  display: block;
+}
+
+#resultsStage .candidate-checks__columns li span {
+  margin-top: 4px;
+  color: #697b80;
+  font-size: 13px;
+}
+
+#resultsStage .criterion__head {
+  grid-template-columns: minmax(0, 1fr) minmax(88px, auto);
+}
+
+#resultsStage .criterion__head span,
+#resultsStage .criterion__head strong {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+#resultsStage .criterion__head strong {
+  max-width: 132px;
+  white-space: normal;
+  text-align: right;
+}
+
+#resultsStage .criterion__head .criterion__not-checked {
+  align-self: start;
+  padding: 6px 9px;
+  border-radius: 999px;
+  color: #66787d;
+  background: #edf3f4;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#resultsStage .report-list-item.is-neutral {
+  color: #687b80;
+  background: rgba(239, 246, 247, 0.88);
+}
+
+@media (max-width: 1280px) {
+  #resultsStage .criteria-card #criteriaList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  #resultsStage .criteria-card #criteriaList,
+  #resultsStage .candidate-checks__columns {
+    grid-template-columns: 1fr;
+  }
+
+  #resultsStage .criterion__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
