@@ -158,6 +158,8 @@ async def test_parallel_compact_routing_optional_block_and_pdf(tmp_path,data,ens
     assert all(model is CompactAcademicAgentOutput for model in fake.response_models[:-1])
     assert fake.token_limits[:-1] and set(fake.token_limits[:-1]) == {3200}
     assert fake.rule_batch_sizes and max(fake.rule_batch_sizes) <= 8
+    assert report["rule_checks"] and all(item.get("title") for item in report["rule_checks"])
+    assert all(item.get("title") for item in report["not_checked"])
     assert report["represented_result"]["title"]==data.RESULT_TITLE
     assert result.extra_blocks["nominal_score_max"]==data.MAX_SCORE
     assert result.extra_blocks["total_score_max"]==0 and result.extra_blocks["coverage"]==0

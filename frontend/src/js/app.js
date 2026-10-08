@@ -888,13 +888,18 @@ function renderCandidateChecks(report) {
   elements.candidateCoverage.textContent = `Проверено ${coverage}% применимых обязательных правил. Оценка: ${state.result.overall_score}/${report.evaluated_max_score}; номинальная шкала — ${report.nominal_max_score}.`;
   const capabilityLabels = { TEXT: "Содержание текста", STRUCTURE: "Структура документа", CROSS_REFERENCE: "Связи между разделами и ссылками", DOCX_FORMATTING: "Доступные параметры DOCX" };
   elements.candidateCheckedList.innerHTML = (report.checked_capabilities || []).map((item) => `<li>${capabilityLabels[item] || "Доступная автоматическая проверка"}</li>`).join("") || "<li>Нет достоверно проверенных параметров.</li>";
-  elements.candidateNotCheckedList.innerHTML = (report.not_checked || []).map((item) => `<li><strong>${item.title}</strong><span>${item.finding || "Недостаточно подтверждённых данных для автоматической оценки."}</span></li>`).join("") || "<li>Все применимые параметры проверены.</li>";
+  elements.candidateNotCheckedList.innerHTML = (report.not_checked || []).map((item) => {
+    const title = item.title || item.rule_title || item.rule_code || "Проверяемое требование";
+    return `<li><strong>${title}</strong><span>${item.finding || "Недостаточно подтверждённых данных для автоматической оценки."}</span></li>`;
+  }).join("") || "<li>Все применимые параметры проверены.</li>";
   const statusLabels = { PASS: "Выполнено", PARTIAL: "Выполнено частично", FAIL: "Требует исправления", NOT_APPLICABLE: "Не применимо", NOT_CHECKED: "Не проверялось автоматически" };
   elements.candidateRuleList.innerHTML = (report.rule_checks || []).map((item) => {
+    const title = item.title || item.rule_title || item.rule_code || "Проверяемое требование";
+    const status = item.status || "NOT_CHECKED";
     const evidence = (item.evidence || []).map((entry) => `<blockquote>${entry.quote || ""}</blockquote>`).join("");
     const source = item.source_type !== "INTERNAL_METHODOLOGY" && item.source_document
       ? `<small>Основание: ${item.source_document}${item.source_section ? `, ${item.source_section}` : ""}${(item.source_pages || []).length ? `, стр. ${item.source_pages.join("–")}` : ""}</small>` : "";
-    return `<article class="candidate-rule is-${item.status.toLowerCase().replaceAll("_", "-")}"><strong>${item.title}</strong><span>${statusLabels[item.status] || item.status}</span><p>${item.finding}</p>${evidence}${item.recommendation ? `<p><b>Что изменить:</b> ${item.recommendation}</p>` : ""}${source}</article>`;
+    return `<article class="candidate-rule is-${status.toLowerCase().replaceAll("_", "-")}"><strong>${title}</strong><span>${statusLabels[status] || status}</span><p>${item.finding || "Недостаточно подтверждённых данных для автоматической оценки."}</p>${evidence}${item.recommendation ? `<p><b>Что изменить:</b> ${item.recommendation}</p>` : ""}${source}</article>`;
   }).join("");
   elements.methodologyLimitations.hidden = !(report.limitations || []).length;
   elements.methodologyLimitationsList.innerHTML = (report.limitations || []).map((item) => `<li>${item}</li>`).join("");

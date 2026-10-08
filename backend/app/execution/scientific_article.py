@@ -10,7 +10,7 @@ from app.db.models import Analysis, AnalysisEvent, AnalysisResult, Document
 from app.db.session import async_session_factory
 from app.execution.candidate_dissertation import CandidateDissertationAgentFlow
 from app.execution.rule_preflight import deterministic_document_preflight
-from app.execution.rule_schemas import RuleBasedAgentOutput
+from app.execution.rule_schemas import CandidateAgentOutput, RuleBasedAgentOutput, RuleCheckResult
 from app.methodology.models import Methodology
 from app.methodology.seeds.scientific_article.data_v1 import DISCLAIMER
 
@@ -93,19 +93,39 @@ class ScientificArticleAgentFlow(CandidateDissertationAgentFlow):
                 status, basis = "NOT_CHECKED", "INSUFFICIENT_CONTEXT"
             if status == "FAIL" and not evidence and not absence_verified:
                 status, basis = "NOT_CHECKED", "INSUFFICIENT_CONTEXT"
-            sanitized.append(item.model_copy(update={
-                "criterion_code": item.rule_code.split(".")[0], "title": rule.title,
-                "source_type": config.get("source_type"), "source_document": None, "source_section": None,
-                "source_pages": [], "methodology_owner": config.get("methodology_owner"),
-                "methodology_version": config.get("methodology_version"), "is_official": False, "authority": None,
-                "capability": config["capability"], "normative_strength": config["normative_strength"],
-                "score_weight": config["score_weight"], "status": status, "evidence": evidence,
-                "verification_basis": basis, "searched_context": searched,
-            }))
+            sanitized.append(RuleCheckResult(
+                rule_code=item.rule_code,
+                criterion_code=item.rule_code.split(".")[0],
+                title=rule.title,
+                status=status,
+                finding=item.finding,
+                recommendation=item.recommendation,
+                confidence=getattr(item, "confidence", 0.0),
+                evidence=evidence,
+                source_type=config.get("source_type"),
+                source_document=None,
+                source_section=None,
+                source_pages=[],
+                methodology_owner=config.get("methodology_owner"),
+                methodology_version=config.get("methodology_version"),
+                is_official=False,
+                authority=None,
+                verification_basis=basis,
+                searched_context=searched,
+                capability=config["capability"],
+                normative_strength=config["normative_strength"],
+                score_weight=config["score_weight"],
+            ))
         for code, rule in known.items():
             if code not in seen:
                 sanitized.append(self._result_from_rule(rule, "NOT_CHECKED", "Параметр не проверялся автоматически.", None, 0.0).model_copy(update={"verification_basis": "INSUFFICIENT_CONTEXT"}))
-        return output.model_copy(update={"rule_results": sanitized})
+        return CandidateAgentOutput(
+            criterion_code=output.criterion_code,
+            summary=output.summary,
+            rule_results=sanitized,
+            strengths=getattr(output, "strengths", []),
+            recommendations=getattr(output, "recommendations", []),
+        )
 
     @staticmethod
     def _route_context(payload, criteria):
